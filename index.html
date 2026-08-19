@@ -1,0 +1,1530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Homework Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+  if (window.pdfjsLib) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  }
+</script>
+<style>
+  :root{
+    --paper:#08090b;
+    --paper-dark:#111319;
+    --card:#0e1013;
+    --card-raised:#15181d;
+    --ink:#e8ebef;
+    --ink-soft:#8a93a0;
+    --stamp:#cf5140;
+    --stamp-dark:#e8836f;
+    --mustard:#3a7bb0;
+    --blue-text:#7fb4e6;
+    --green:#5fb87f;
+    --line:rgba(255,255,255,0.07);
+    --line-light:rgba(255,255,255,0.14);
+    --shadow: 0 10px 30px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.4);
+    --glow: 0 0 0 1px rgba(255,255,255,0.03) inset;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);
+    background-image:
+      radial-gradient(ellipse 900px 400px at 20% -10%, rgba(58,123,176,0.10), transparent 60%),
+      radial-gradient(ellipse 700px 350px at 90% 0%, rgba(207,81,64,0.06), transparent 55%),
+      linear-gradient(var(--paper-dark) 1px, transparent 1px),
+      linear-gradient(90deg, var(--paper-dark) 1px, transparent 1px);
+    background-size: 100% 100%, 100% 100%, 100% 34px, 34px 100%;
+    background-position: 0 0, 0 0, 0 90px, 0 0;
+    background-repeat: no-repeat, no-repeat, repeat, repeat;
+    color:var(--ink); font-family:'Inter',sans-serif; min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:920px;margin:0 auto;padding:22px 16px 80px;}
+  header.hub{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:18px;flex-wrap:wrap;border-bottom:3px solid var(--mustard);padding-bottom:14px;}
+  .hub-title{font-family:'Zilla Slab',serif;font-weight:700;font-size:2.3rem;letter-spacing:-0.01em;line-height:1;margin:0;color:var(--ink);}
+  .hub-title span{color:var(--stamp-dark);}
+  .hub-sub{font-family:'IBM Plex Mono',monospace;font-size:0.78rem;color:var(--ink-soft);margin-top:6px;text-transform:uppercase;letter-spacing:0.08em;}
+  .reg-no{font-family:'IBM Plex Mono',monospace;font-size:0.7rem;color:var(--ink-soft);text-align:right;line-height:1.5;}
+
+  nav.tabs{display:flex;gap:2px;margin-bottom:22px;flex-wrap:wrap;}
+  .tab-btn{
+    font-family:'IBM Plex Mono',monospace;font-size:0.78rem;letter-spacing:0.05em;text-transform:uppercase;
+    padding:10px 16px 8px;background:var(--paper-dark);border:none;border-top-left-radius:8px;border-top-right-radius:8px;
+    color:var(--ink-soft);cursor:pointer;position:relative;top:2px;border-bottom:2px solid transparent;
+  }
+  .tab-btn.active{background:var(--card);color:var(--blue-text);font-weight:600;border-bottom:2px solid var(--card);box-shadow:0 -2px 0 rgba(0,0,0,0.2) inset;}
+  .panel{background:linear-gradient(180deg, var(--card-raised), var(--card));border-radius:12px;padding:22px;box-shadow:var(--shadow), var(--glow);border:1px solid var(--line);}
+
+  .row{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px;}
+  .btn{
+    font-family:'Inter',sans-serif;font-weight:600;font-size:0.82rem;padding:9px 16px;border-radius:8px;border:none;cursor:pointer;
+    background:var(--mustard);color:#eef3f9;transition:transform .08s ease, box-shadow .15s ease;
+  }
+  .btn:hover{box-shadow:0 0 0 3px rgba(58,123,176,0.18);}
+  .btn:active{transform:translateY(1px);}
+  .btn.secondary{background:transparent;color:var(--ink);border:1.5px solid var(--line-light);}
+  .btn.secondary:hover{box-shadow:0 0 0 3px rgba(255,255,255,0.06);}
+  .btn.stamp-btn{background:var(--stamp);color:#fbeee9;}
+  .btn.stamp-btn:hover{box-shadow:0 0 0 3px rgba(207,81,64,0.2);}
+  .btn.small{padding:6px 11px;font-size:0.72rem;}
+  .btn:disabled{opacity:0.4;cursor:default;}
+  .btn:disabled:hover{box-shadow:none;}
+
+  .cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px;}
+  .tiles-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;}
+  .tile{position:relative;border-radius:8px;overflow:hidden;aspect-ratio:4/3;cursor:pointer;background:var(--card-raised);border:1px solid var(--line);}
+  .tile img{width:100%;height:100%;object-fit:cover;display:block;}
+  .tile-label{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent, rgba(0,0,0,0.8) 65%);padding:8px 10px 8px;font-family:'IBM Plex Mono',monospace;font-size:0.78rem;color:#fff;line-height:1.25;}
+  .tile-sub{font-size:0.62rem;color:#d8d8d8;margin-top:1px;}
+  .tile-badge{position:absolute;top:7px;right:7px;width:9px;height:9px;border-radius:50%;box-shadow:0 0 0 2px rgba(0,0,0,0.4);}
+  .tile-add{display:flex;align-items:center;justify-content:center;border:1.5px dashed var(--line-light);color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;font-size:0.85rem;background:transparent;gap:6px;}
+  .card{
+    background:var(--card-raised);border:1px solid var(--line);border-radius:10px;padding:14px 14px 12px;position:relative;
+    box-shadow:0 4px 14px rgba(0,0,0,0.4);transition:transform .12s ease, box-shadow .12s ease;
+  }
+  .card:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(0,0,0,0.5);}
+  .card:before{content:'';position:absolute;top:10px;left:10px;width:9px;height:9px;border-radius:50%;background:var(--paper);box-shadow:inset 0 1px 3px rgba(0,0,0,0.6);}
+  .card-tab{position:absolute;top:-9px;right:14px;font-family:'IBM Plex Mono',monospace;font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:#fff;padding:3px 8px;border-radius:5px 5px 0 0;}
+  .card h3{font-family:'Zilla Slab',serif;font-size:1.08rem;margin:14px 0 4px 22px;line-height:1.2;color:var(--ink);}
+  .card .meta{font-family:'IBM Plex Mono',monospace;font-size:0.72rem;color:var(--ink-soft);margin-left:22px;margin-bottom:10px;}
+  .type-badge{display:inline-block;font-size:0.62rem;text-transform:uppercase;letter-spacing:0.05em;padding:2px 7px;border-radius:3px;font-family:'IBM Plex Mono',monospace;margin-right:6px;color:#fff;}
+  .card-actions{display:flex;gap:6px;margin-left:22px;flex-wrap:wrap;margin-top:8px;}
+  .stamp-mark{position:absolute;bottom:8px;right:10px;font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:0.68rem;color:var(--stamp-dark);border:2px solid var(--stamp-dark);border-radius:4px;padding:2px 6px;transform:rotate(-9deg);opacity:0.9;letter-spacing:0.04em;}
+
+  .empty{font-family:'IBM Plex Mono',monospace;font-size:0.85rem;color:var(--ink-soft);text-align:center;padding:30px 10px;border:1.5px dashed var(--line-light);border-radius:6px;}
+
+  .modal-bg{position:fixed;inset:0;background:rgba(8,6,4,0.72);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px;}
+  .modal{background:linear-gradient(180deg, var(--card-raised), var(--card));border:1px solid var(--line-light);border-radius:14px;padding:22px;width:100%;max-width:420px;max-height:90vh;overflow:auto;box-shadow:var(--shadow);}
+  .modal h3{font-family:'Zilla Slab',serif;margin-top:0;color:var(--ink);}
+  .field{margin-bottom:12px;}
+  .field label{display:block;font-family:'IBM Plex Mono',monospace;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-soft);margin-bottom:4px;}
+  .field input, .field select, .field textarea{
+    width:100%;padding:8px 10px;border:1.5px solid var(--line-light);border-radius:5px;font-family:'Inter',sans-serif;font-size:0.9rem;background:var(--paper);color:var(--ink);
+  }
+  .field textarea{resize:vertical;min-height:50px;}
+  .color-swatch{width:22px;height:22px;border-radius:5px;cursor:pointer;display:inline-block;}
+  .icon-swatch{width:32px;height:32px;border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1.1rem;background:var(--paper);border:1.5px solid var(--line-light);}
+  .icon-swatch.picked{border-color:var(--mustard);background:var(--paper-dark);}
+
+  .prop-row{display:flex;flex-direction:column;gap:2px;padding:10px 0;border-bottom:1px solid var(--line);}
+  .prop-row:last-child{border-bottom:none;}
+  .prop-label{display:flex;align-items:center;gap:7px;font-family:'IBM Plex Mono',monospace;font-size:0.68rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-soft);}
+  .prop-value{font-family:'Inter',sans-serif;font-size:0.9rem;color:var(--ink);padding-left:20px;word-break:break-word;}
+  .prop-value.empty{color:var(--ink-soft);font-style:italic;}
+  .prop-value a{color:var(--blue-text);}
+  .prop-row input, .prop-row textarea{
+    margin-left:20px;width:calc(100% - 20px);padding:6px 9px;border:1.5px solid var(--line-light);border-radius:5px;font-family:'Inter',sans-serif;font-size:0.88rem;background:var(--paper);color:var(--ink);
+  }
+  .prop-row textarea{resize:vertical;min-height:44px;}
+
+  .cal-grid{display:grid;grid-template-columns:repeat(7,minmax(92px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:4px;overflow:hidden;min-width:640px;}
+  .cal-grid-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:4px;}
+  .cal-dow{background:var(--mustard);color:#eef3f9;font-family:'IBM Plex Mono',monospace;font-size:0.62rem;text-align:center;padding:6px 2px;text-transform:uppercase;font-weight:600;}
+  .cal-day{background:var(--card-raised);min-height:78px;padding:5px;font-family:'IBM Plex Mono',monospace;font-size:0.7rem;color:var(--ink-soft);position:relative;overflow:hidden;}
+  .cal-day.off{background:var(--paper);opacity:0.5;}
+  .cal-num{font-weight:600;color:var(--ink);}
+  .cal-dot{display:block;width:100%;white-space:nowrap;font-size:0.58rem;background:var(--stamp);color:#fff;border-radius:3px;padding:1px 4px;margin-top:3px;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;}
+  .cal-more{display:block;font-size:0.58rem;color:var(--ink-soft);margin-top:3px;font-style:italic;}
+  .cal-month-label{font-family:'Zilla Slab',serif;font-size:1.3rem;text-align:center;margin-bottom:12px;color:var(--ink);}
+
+  .view-switch{display:flex;gap:4px;margin-bottom:14px;flex-wrap:wrap;}
+  .view-switch button{font-family:'IBM Plex Mono',monospace;font-size:0.68rem;text-transform:uppercase;letter-spacing:0.04em;padding:6px 12px;border-radius:4px;border:1px solid var(--line-light);background:transparent;color:var(--ink-soft);cursor:pointer;}
+  .view-switch button.active{background:var(--mustard);color:#eef3f9;border-color:var(--mustard);}
+  .agenda-day{border:1px solid var(--line);border-radius:4px;margin-bottom:10px;overflow:hidden;background:var(--card-raised);}
+  .agenda-day-header{background:var(--paper-dark);padding:8px 12px;font-family:'IBM Plex Mono',monospace;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink);}
+  .agenda-day-header.today{border-left:3px solid var(--mustard);color:var(--blue-text);}
+  .agenda-item{display:flex;gap:10px;align-items:flex-start;padding:9px 12px;border-top:1px solid var(--line);}
+  .agenda-time{font-family:'IBM Plex Mono',monospace;font-size:0.7rem;color:var(--ink-soft);min-width:60px;flex-shrink:0;}
+  .agenda-swatch{width:8px;height:8px;border-radius:2px;margin-top:5px;flex-shrink:0;}
+  .agenda-title{font-size:0.85rem;color:var(--ink);}
+  .agenda-sub{font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:var(--ink-soft);margin-top:1px;}
+  .agenda-empty{padding:10px 12px;font-family:'IBM Plex Mono',monospace;font-size:0.72rem;color:var(--ink-soft);font-style:italic;}
+
+  .drop{border:2px dashed var(--line-light);border-radius:8px;padding:34px 16px;text-align:center;font-family:'IBM Plex Mono',monospace;color:var(--ink-soft);cursor:pointer;background:var(--card-raised);}
+  .drop.drag{border-color:var(--stamp-dark);color:var(--stamp-dark);}
+  .scan-list{margin-top:18px;}
+  .scan-item{display:flex;align-items:flex-start;gap:10px;padding:10px;border-bottom:1px solid var(--line);}
+  .scan-item input[type=checkbox]{margin-top:4px;}
+  .scan-item .si-title{font-weight:600;font-size:0.92rem;color:var(--ink);}
+  .scan-item .si-meta{font-family:'IBM Plex Mono',monospace;font-size:0.72rem;color:var(--ink-soft);}
+  .status-line{font-family:'IBM Plex Mono',monospace;font-size:0.78rem;color:var(--ink-soft);margin-top:10px;min-height:18px;}
+  .settings-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px;}
+  .settings-row label{font-family:'IBM Plex Mono',monospace;font-size:0.7rem;text-transform:uppercase;color:var(--ink-soft);}
+  .settings-row input, .settings-row select{padding:6px 9px;border:1.5px solid var(--line-light);border-radius:5px;font-family:'Inter',sans-serif;font-size:0.82rem;background:var(--paper);color:var(--ink);}
+  ::selection{background:var(--stamp);color:#fff;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hub">
+    <div>
+      <h1 class="hub-title">Homework <span>Tracker</span></h1>
+      <div class="hub-sub">Assignment Register &amp; Syllabus Desk</div>
+    </div>
+    <div class="reg-no" id="regNo">FILE NO. —<br>OPEN ITEMS: —</div>
+  </header>
+
+  <nav class="tabs" id="tabs"></nav>
+  <div id="panelHost"></div>
+</div>
+
+<script>
+// ---- Supabase (replaces window.storage — works outside Claude.ai) ----
+const SUPABASE_URL = 'https://iglhfnjckxjzevwjemcm.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_cEYJywaRkhBxqBwEuMxorg_JIyoACpZ';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const CALSYNC_URL = `${SUPABASE_URL}/functions/v1/calendar-sync`;
+const COURSE_COLORS = ['#2f6fa0','#d97706','#5fb87f','#8b6dbf','#c0453a','#6b7480'];
+const TYPE_COLORS = {homework:'#2f6fa0', quiz:'#d97706', test:'#c0453a', project:'#8b6dbf', reading:'#5fb87f', other:'#6b7480'};
+const DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+// Google Calendar's own colorId palette (Calendar API "Event colors")
+const GOOGLE_COLOR_MAP = {
+  '1':'#7986cb', '2':'#33b679', '3':'#8e24aa', '4':'#e67c73', '5':'#f6bf26',
+  '6':'#f4511e', '7':'#039be5', '8':'#616161', '9':'#3f51b5', '10':'#0b8043', '11':'#d50000'
+};
+function courseDatalistHTML(id){
+  return `<datalist id="${id}">${state.courses.map(c=>`<option value="${c.name}">`).join('')}</datalist>`;
+}
+
+const CLASS_ICONS = ['📘','📗','📙','📕','🧪','🔬','📐','📊','💻','🧮','⚙️','🎨','🎵','🏛️','🌐','🧬'];
+function googleBadgeHTML(){
+  return `<svg width="9" height="9" viewBox="0 0 10 10" style="display:inline-block;vertical-align:middle;margin-right:3px;flex-shrink:0;"><circle cx="2.6" cy="2.6" r="2.4" fill="#4285F4"/><circle cx="7.4" cy="2.6" r="2.4" fill="#EA4335"/><circle cx="2.6" cy="7.4" r="2.4" fill="#FBBC05"/><circle cx="7.4" cy="7.4" r="2.4" fill="#34A853"/></svg>`;
+}
+
+let state = { assignments: [], courses: [], settings: { calendarName: 'University of Michigan Schedule', calendarId: '', calendars: [], showSyncedDuplicates: false }, tab: 'cards', calendarOptions: null, googleEvents: {}, googleEventsYearLoaded: false, googleYearLoading: false };
+
+function getSyncTargets(){
+  // returns [{id,name}, ...] — falls back to the legacy single-calendar field for anyone who set it up before multi-calendar support
+  if(state.settings.calendars && state.settings.calendars.length>0) return state.settings.calendars;
+  if(state.settings.calendarId) return [{id: state.settings.calendarId, name: state.settings.calendarName}];
+  return [{id:'', name: state.settings.calendarName || 'primary calendar'}]; // name-based fallback, no id yet
+}
+const REMINDER_HOURS = [168, 72, 48, 24]; // 1 week, 3 days, 48h, 24h before
+
+function assignmentToRow(a){
+  return { id:a.id, title:a.title, course:a.course||'', type:a.type||'other', date:a.date||null, time:a.time||null,
+    end_time:a.endTime||null, location:a.location||'', notes:a.notes||'', done:!!a.done, synced:!!a.synced,
+    sync_error:!!a.syncError, google_event_ids:a.googleEventIds||{} };
+}
+function rowToAssignment(r){
+  return { id:r.id, title:r.title, course:r.course||'', type:r.type||'other', date:r.date||'', time:(r.time||'').slice(0,5),
+    endTime:(r.end_time||'').slice(0,5), location:r.location||'', notes:r.notes||'', done:r.done, synced:r.synced,
+    syncError:r.sync_error, googleEventIds:r.google_event_ids||{} };
+}
+function courseToRow(c){
+  return { id:c.id, name:c.name, icon:c.icon||'', color:c.color||'', course_number:c.courseNumber||'', credits:c.credits||'',
+    description:c.description||'', professor:c.professor||'', office_hours:c.officeHours||'', canvas_link:c.canvasLink||'',
+    quarter:c.quarter||'', location:c.location||'', days:c.days||[], start_time:c.startTime||null, end_time:c.endTime||null,
+    term_ends:c.termEnds||null, synced:!!c.synced, sync_error:!!c.syncError, google_event_ids:c.googleEventIds||{} };
+}
+function rowToCourse(r){
+  return { id:r.id, name:r.name, icon:r.icon||'', color:r.color||'', courseNumber:r.course_number||'', credits:r.credits||'',
+    description:r.description||'', professor:r.professor||'', officeHours:r.office_hours||'', canvasLink:r.canvas_link||'',
+    quarter:r.quarter||'', location:r.location||'', days:r.days||[], startTime:(r.start_time||'').slice(0,5),
+    endTime:(r.end_time||'').slice(0,5), termEnds:r.term_ends||'', synced:r.synced, syncError:r.sync_error,
+    googleEventIds:r.google_event_ids||{} };
+}
+
+async function loadState(){
+  try{
+    const { data, error } = await sb.from('assignments').select('*').order('created_at', {ascending:true});
+    if(error) throw error;
+    state.assignments = (data||[]).map(rowToAssignment);
+  }catch(e){ console.error('load assignments failed', e); state.assignments = []; }
+  try{
+    const { data, error } = await sb.from('courses').select('*').order('created_at', {ascending:true});
+    if(error) throw error;
+    state.courses = (data||[]).map(rowToCourse);
+  }catch(e){ console.error('load courses failed', e); state.courses = []; }
+  try{
+    const { data, error } = await sb.from('app_settings').select('*').eq('id', true).maybeSingle();
+    if(error) throw error;
+    if(data){
+      const calendars = data.calendars || [];
+      state.settings = { calendarName: data.calendar_name || (calendars[0]?.name || 'University of Michigan Schedule'),
+        calendarId: calendars[0]?.id || '', calendars };
+    }
+  }catch(e){ console.error('load settings failed', e); }
+  render();
+}
+async function saveAssignments(){
+  try{
+    // full-sync strategy: replace table contents with current in-memory state. Fine at personal-project scale.
+    const { error: delErr } = await sb.from('assignments').delete().neq('id', '__never__');
+    if(delErr) throw delErr;
+    if(state.assignments.length>0){
+      const { error: insErr } = await sb.from('assignments').insert(state.assignments.map(assignmentToRow));
+      if(insErr) throw insErr;
+    }
+  }catch(e){ console.error('save assignments failed', e); }
+}
+async function saveCourses(){
+  try{
+    const { error: delErr } = await sb.from('courses').delete().neq('id', '__never__');
+    if(delErr) throw delErr;
+    if(state.courses.length>0){
+      const { error: insErr } = await sb.from('courses').insert(state.courses.map(courseToRow));
+      if(insErr) throw insErr;
+    }
+  }catch(e){ console.error('save courses failed', e); }
+}
+async function saveSettings(){
+  try{
+    const { error } = await sb.from('app_settings').update({
+      calendar_name: state.settings.calendarName || '',
+      calendars: state.settings.calendars || []
+    }).eq('id', true);
+    if(error) throw error;
+  }catch(e){ console.error('save settings failed', e); }
+}
+
+function courseColor(course){
+  const defined = state.courses.find(c=>c.name.toLowerCase()===((course||'').toLowerCase()));
+  if(defined) return defined.color;
+  const list = [...new Set(state.assignments.map(a=>a.course))];
+  const idx = list.indexOf(course);
+  return COURSE_COLORS[idx % COURSE_COLORS.length] || '#3a5a7a';
+}
+function fmtTime(t){
+  if(!t) return '';
+  const [h,min] = t.split(':').map(Number);
+  const period = h>=12 ? 'PM' : 'AM';
+  const h12 = h%12===0 ? 12 : h%12;
+  return `${h12}:${String(min).padStart(2,'0')}${period}`;
+}
+function fmtDate(iso){
+  if(!iso) return '—';
+  const d = new Date(iso+'T00:00:00');
+  return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+}
+function daysUntil(iso){
+  const d = new Date(iso+'T00:00:00'); const now = new Date(); now.setHours(0,0,0,0);
+  return Math.round((d-now)/86400000);
+}
+
+function render(){
+  const open = state.assignments.filter(a=>!a.done).length;
+  document.getElementById('regNo').innerHTML = `FILE NO. ${String(state.assignments.length).padStart(3,'0')}<br>OPEN ITEMS: ${open}`;
+
+  const tabs = document.getElementById('tabs');
+  tabs.innerHTML = ['cards:Cards','classes:Classes','calendar:Calendar','scan:Scan Syllabus','settings:Settings'].map(t=>{
+    const [id,label] = t.split(':');
+    return `<button class="tab-btn ${state.tab===id?'active':''}" data-tab="${id}">${label}</button>`;
+  }).join('');
+  tabs.querySelectorAll('.tab-btn').forEach(b=>b.onclick=()=>{state.tab=b.dataset.tab; render();});
+
+  const host = document.getElementById('panelHost');
+  if(state.tab==='cards') host.innerHTML = renderCards();
+  else if(state.tab==='classes') host.innerHTML = renderClasses();
+  else if(state.tab==='calendar') host.innerHTML = renderCalendar();
+  else if(state.tab==='scan') host.innerHTML = renderScan();
+  else host.innerHTML = renderSettings();
+  attachHandlers();
+
+  if(state.tab==='calendar' && !state.googleYearLoading){
+    const { y, m } = currentRefMonth();
+    const key = `${y}-${m}`;
+    const loaded = state.googleLoadedMonths && state.googleLoadedMonths[key];
+    if(!loaded) pullGoogleEvents();
+  }
+}
+
+function renderCards(){
+  const sorted = [...state.assignments].sort((a,b)=> (a.done - b.done) || (a.date||'').localeCompare(b.date||''));
+  return `
+  <div class="panel">
+    <div class="row">
+      <strong style="font-family:'Zilla Slab',serif;font-size:1.15rem;">Assignment Cards</strong>
+      <button class="btn stamp-btn" id="addBtn">+ New Entry</button>
+    </div>
+    ${sorted.length===0 ? `<div class="empty">No assignments logged yet. Add one manually or scan a syllabus.</div>` : `
+    <div class="cards-grid">
+      ${sorted.map(a=>{
+        const cc = courseColor(a.course);
+        const tc = TYPE_COLORS[a.type]||'#5a5a3a';
+        const du = a.date ? daysUntil(a.date) : null;
+        const dueLabel = du===null?'':(du<0?`${Math.abs(du)}d overdue`:du===0?'due today':`in ${du}d`);
+        return `<div class="card">
+          <div class="card-tab" style="background:${cc}">${a.course||'General'}</div>
+          <h3>${a.title}</h3>
+          <div class="meta"><span class="type-badge" style="background:${tc}">${a.type}</span>${fmtDate(a.date)}${a.time?' · '+fmtTime(a.time)+(a.endTime?'–'+fmtTime(a.endTime):''):''}${a.location?' · '+a.location:''} ${dueLabel?`· ${dueLabel}`:''}</div>
+          ${a.notes?`<div class="meta" style="margin-top:-4px;">${a.notes}</div>`:''}
+          <div class="card-actions">
+            <button class="btn small ${a.done?'secondary':''}" data-act="toggle" data-id="${a.id}">${a.done?'Mark open':'Mark done'}</button>
+            <button class="btn small ${a.synced && !a.syncError?'secondary':''}" data-act="sync" data-id="${a.id}" ${a.syncError?'style="color:var(--stamp-dark);border-color:var(--stamp-dark);"':(a.synced?'style="opacity:1;cursor:default;pointer-events:none;"':'')}>${a.syncError?'Retry Sync':a.synced?'Synced ✓':'Send to Calendar'}</button>
+            <button class="btn small secondary" data-act="del" data-id="${a.id}">Delete</button>
+          </div>
+          ${a.done?`<div class="stamp-mark">SUBMITTED</div>`:''}
+        </div>`;
+      }).join('')}
+    </div>`}
+  </div>`;
+}
+
+function renderClasses(){
+  return `
+  <div class="panel">
+    <div class="row">
+      <strong style="font-family:'Zilla Slab',serif;font-size:1.15rem;">Classes</strong>
+      <button class="btn stamp-btn" id="addClassBtn">+ Add Class</button>
+    </div>
+    ${state.courses.length===0 ? `<div class="empty">No classes yet. Add one to build out a course card — description, meeting time, professor, office hours, and more, just like a course database.</div>` : `
+    <div class="cards-grid">
+      ${state.courses.map(c=>{
+        const meetingTime = (c.days&&c.days.length) ? `${c.days.join('')} ${c.startTime?fmtTime(c.startTime):''}${c.endTime?'–'+fmtTime(c.endTime):''}` : '';
+        const assignCount = state.assignments.filter(a=>a.course && c.name && a.course.toLowerCase()===c.name.toLowerCase()).length;
+        return `<div class="card" data-class-card="${c.id}" style="cursor:pointer;">
+          <div class="card-tab" style="background:${c.color}">${c.courseNumber||c.name}</div>
+          <h3>${c.icon||'📘'} ${c.name}</h3>
+          <div class="meta" style="margin-bottom:2px;">${c.description||'No description yet'}</div>
+          ${meetingTime?`<div class="meta" style="margin-bottom:2px;">${meetingTime}</div>`:''}
+          ${c.professor?`<div class="meta" style="margin-bottom:2px;">${c.professor}</div>`:''}
+          ${c.location?`<div class="meta" style="margin-bottom:2px;">${c.location}</div>`:''}
+          <div class="meta" style="color:var(--blue-text);">→ ${assignCount} assignment${assignCount===1?'':'s'}</div>
+          <div class="card-actions">
+            <button class="btn small secondary" data-cact="syncClass" data-cid="${c.id}" ${(c.synced && !c.syncError)?'disabled':''}>${(c.synced && !c.syncError)?'Synced':'Send to Calendar'}</button>
+            <button class="btn small secondary" data-cact="delClass" data-cid="${c.id}">Delete</button>
+          </div>
+          ${(c.synced && !c.syncError)?`<div class="synced-mark">✓ on calendar</div>`:''}
+          ${c.syncError?`<div class="synced-mark" style="color:var(--stamp-dark);">⚠ sync failed</div>`:''}
+        </div>`;
+      }).join('')}
+    </div>`}
+  </div>`;
+}
+
+let clickableItems = [];
+function registerClickable(it){
+  clickableItems.push(it);
+  return clickableItems.length - 1;
+}
+
+function getKnownSyncedEventIds(){
+  const ids = new Set();
+  state.assignments.forEach(a=>{ if(a.googleEventIds) Object.values(a.googleEventIds).forEach(id=>id && ids.add(id)); });
+  state.courses.forEach(c=>{ if(c.googleEventIds) Object.values(c.googleEventIds).forEach(id=>id && ids.add(id)); });
+  return ids;
+}
+
+function buildDayItems(y,m,d){
+  const iso = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  const weekday = DOW[new Date(y,m,d).getDay()];
+  const monthKey = `${y}-${m}`;
+  const gEvents = state.googleEvents[monthKey] || [];
+  const assignToday = state.assignments.filter(a=>a.date===iso);
+  const classesToday = state.courses.filter(c=>(c.days||[]).includes(weekday));
+  const knownIds = state.settings.showSyncedDuplicates ? null : getKnownSyncedEventIds();
+  const googleToday = gEvents.filter(e=> e.date===iso && (state.settings.showSyncedDuplicates || !knownIds.has(e.id)));
+  let items = [
+    ...classesToday.map(c=>({time:c.startTime||'', timeLabel: c.startTime?`${fmtTime(c.startTime)}${c.endTime?'–'+fmtTime(c.endTime):''}`:'', title:`${c.icon||'📘'} ${c.name}`, sub:`Class${c.location?' · '+c.location:''}`, bg:c.color, kind:'class', ref:c})),
+    ...assignToday.map(a=>({time:a.time||'', timeLabel: a.time?`${fmtTime(a.time)}${a.endTime?'–'+fmtTime(a.endTime):''}`:'', title:a.title, sub:`${a.type}${a.course?' · '+a.course:''}${a.location?' · '+a.location:''}`, bg:courseColor(a.course), kind:'assignment', ref:a})),
+    ...googleToday.map(e=>({time:e.time||'', timeLabel: e.time?`${fmtTime(e.time)}${e.endTime?'–'+fmtTime(e.endTime):''}`:'All day', title:e.title, sub:`${e.calendarName||'Google Calendar'}${e.location?' · '+e.location:''}`, bg:e.color||'#4285F4', kind:'google', ref:e}))
+  ];
+  items.sort((x,y2)=>(x.time||'99:99').localeCompare(y2.time||'99:99'));
+  return {iso, items};
+}
+
+function renderMonthGrid(){
+  const now = new Date();
+  const y = state.calY ?? now.getFullYear();
+  const m = state.calM ?? now.getMonth();
+  const first = new Date(y,m,1);
+  const startDow = first.getDay();
+  const daysInMonth = new Date(y,m+1,0).getDate();
+  const label = first.toLocaleDateString('en-US',{month:'long',year:'numeric'});
+  let cells = '';
+  for(let i=0;i<startDow;i++) cells += `<div class="cal-day off"></div>`;
+  for(let d=1; d<=daysInMonth; d++){
+    const {items} = buildDayItems(y,m,d);
+    const CAP = 3;
+    const shown = items.slice(0,CAP);
+    const extra = items.length - shown.length;
+    cells += `<div class="cal-day"><span class="cal-num">${d}</span>`+
+      shown.map(it=>`<span class="cal-dot" data-item-idx="${registerClickable(it)}" style="background:${it.bg};cursor:pointer;" title="${it.title} ${it.sub||''}">${it.kind==='google'?googleBadgeHTML():''}${it.timeLabel?it.timeLabel+' ':''}${it.title}</span>`).join('')+
+      (extra>0 ? `<span class="cal-more">+${extra} more</span>` : '')+
+      `</div>`;
+  }
+  const html = `
+    <div class="cal-grid-scroll">
+      <div class="cal-grid">
+        ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=>`<div class="cal-dow">${d}</div>`).join('')}
+        ${cells}
+      </div>
+    </div>`;
+  return {html, label};
+}
+
+function mondayOf(iso){
+  const d = new Date(iso+'T00:00:00');
+  const day = d.getDay(); // 0=Sun..6=Sat
+  const diff = (day===0) ? -6 : (1-day);
+  d.setDate(d.getDate()+diff);
+  return d.toISOString().slice(0,10);
+}
+
+function renderAgenda(numDays, startIso){
+  const anchor = new Date((startIso || state.calAnchor)+'T00:00:00');
+  const todayIso = new Date().toISOString().slice(0,10);
+  let rows = '';
+  let firstDate=null, lastDate=null;
+  for(let i=0;i<numDays;i++){
+    const d = new Date(anchor); d.setDate(anchor.getDate()+i);
+    const y=d.getFullYear(), m=d.getMonth(), day=d.getDate();
+    if(i===0) firstDate=d;
+    lastDate=d;
+    const {iso, items} = buildDayItems(y,m,day);
+    const isToday = iso===todayIso;
+    const dLabel = d.toLocaleDateString('en-US',{weekday:'long', month:'short', day:'numeric'});
+    rows += `<div class="agenda-day">
+      <div class="agenda-day-header ${isToday?'today':''}">${dLabel}${isToday?' · Today':''}</div>
+      ${items.length===0 ? `<div class="agenda-empty">Nothing scheduled</div>` :
+        items.map(it=>`<div class="agenda-item" data-item-idx="${registerClickable(it)}" style="cursor:pointer;">
+          <div class="agenda-time">${it.timeLabel||'—'}</div>
+          <div class="agenda-swatch" style="background:${it.bg};"></div>
+          <div>
+            <div class="agenda-title">${it.kind==='google'?googleBadgeHTML():''}${it.title}</div>
+            ${it.sub?`<div class="agenda-sub">${it.sub}</div>`:''}
+          </div>
+        </div>`).join('')}
+    </div>`;
+  }
+  const label = numDays===1
+    ? firstDate.toLocaleDateString('en-US',{weekday:'long', month:'long', day:'numeric', year:'numeric'})
+    : `${firstDate.toLocaleDateString('en-US',{month:'short',day:'numeric'})} – ${lastDate.toLocaleDateString('en-US',{month:'short',day:'numeric', year:'numeric'})}`;
+  return {html: rows, label};
+}
+
+function renderCalendar(){
+  if(!state.calView) state.calView = 'month';
+  if(!state.calAnchor) state.calAnchor = new Date().toISOString().slice(0,10);
+  clickableItems = [];
+  const unsyncedCount = state.assignments.filter(a=>!a.synced).length + state.courses.filter(c=>!c.synced).length;
+
+  let bodyHtml, navLabel;
+  if(state.calView==='month'){
+    const r = renderMonthGrid();
+    bodyHtml = r.html; navLabel = r.label;
+  } else {
+    const days = state.calView==='day'?1:7;
+    const startIso = state.calView==='week' ? mondayOf(state.calAnchor) : state.calAnchor;
+    const r = renderAgenda(days, startIso);
+    bodyHtml = r.html; navLabel = r.label;
+  }
+
+  return `
+  <div class="panel">
+    <div class="row" style="margin-bottom:8px;">
+      <div class="view-switch" style="margin-bottom:0;">
+        ${[['day','Day'],['week','Week'],['month','Month']].map(([id,l])=>`<button class="${state.calView===id?'active':''}" data-view="${id}">${l}</button>`).join('')}
+      </div>
+      <button class="btn stamp-btn small" id="newEventBtn">+ New Event</button>
+    </div>
+    <div class="row">
+      <button class="btn secondary small" id="prevCal">← Prev</button>
+      <div class="cal-month-label">${navLabel}</div>
+      <button class="btn secondary small" id="nextCal">Next →</button>
+    </div>
+    <div class="row" style="margin-top:-6px;">
+      <span class="status-line" id="calSyncStatus" style="margin-top:0;font-size:0.68rem;" title="${getSyncTargets().map(c=>c.name.trim()).join(', ')}">→ <strong style="color:var(--ink);">${getSyncTargets().length>1 ? `${getSyncTargets().length} calendars` : (getSyncTargets()[0]?.name.trim()||'')}</strong>${getSyncTargets().every(c=>c.id)?` <span style="color:var(--green);">✓</span>`:` <span style="color:var(--stamp-dark);">(set in Settings)</span>`}</span>
+      <button class="btn small" id="calSyncAllBtn" ${unsyncedCount===0?'':''} style="background:${unsyncedCount===0?'var(--green)':'var(--stamp)'};color:#fff;${unsyncedCount===0?'opacity:1;cursor:default;pointer-events:none;':''}">${unsyncedCount===0?'All synced ✓':`Sync all to Calendar (${unsyncedCount})`}</button>
+    </div>
+    <div class="row" style="margin-top:-8px;">
+      <span class="status-line" id="calPullStatus" style="margin-top:0;">${state.googleYearLoading?'Loading from Google...':state.googleEventsYearLoaded?`Synced with Google (☁).`:'Not showing your existing Google Calendar events yet.'}</span>
+      <button class="btn secondary small" id="calPullBtn" ${state.googleYearLoading?'disabled':''}>${state.googleEventsYearLoaded?'Refresh this month from Google':'Load this month from Google'}</button>
+    </div>
+    ${bodyHtml}
+  </div>`;
+}
+
+function renderScan(){
+  return `
+  <div class="panel">
+    <strong style="font-family:'Zilla Slab',serif;font-size:1.15rem;">Scan a Syllabus</strong>
+    <p style="font-family:'IBM Plex Mono',monospace;font-size:0.78rem;color:var(--ink-soft);">Upload a syllabus (PDF or .txt). I'll pull out quizzes, tests, and assignment due dates for you to review before adding them.</p>
+    <div class="drop" id="dropZone">Drop syllabus file here, or click to choose<br><input type="file" id="fileInput" accept=".pdf,.txt" style="display:none;"></div>
+    <div class="status-line" id="scanStatus"></div>
+    <div class="scan-list" id="scanResults"></div>
+  </div>`;
+}
+
+function renderSettings(){
+  return `
+  <div class="panel">
+    <strong style="font-family:'Zilla Slab',serif;font-size:1.15rem;">Calendar Settings</strong>
+    <p style="font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:var(--ink-soft);">
+      Currently syncing to: <strong style="color:var(--ink);">${getSyncTargets().map(c=>c.name.trim()).join(', ')}</strong>${getSyncTargets().every(c=>c.id)?` <span style="color:var(--green);">(connected ✓)</span>`:` <span style="color:var(--stamp);">(by name only — load your list below to lock this in)</span>`}
+    </p>
+    <div class="row" style="margin-top:6px;">
+      <button class="btn secondary" id="loadCalsBtn">Load my Google calendars</button>
+    </div>
+    <div id="calPickerHost" style="margin-top:12px;"></div>
+    <div style="margin-top:16px;display:flex;align-items:center;gap:8px;">
+      <input type="checkbox" id="dupToggle" ${state.settings.showSyncedDuplicates?'checked':''} style="width:auto;">
+      <label style="margin:0;text-transform:none;font-family:'Inter',sans-serif;font-size:0.85rem;color:var(--ink);">Also show my synced classes/assignments as separate pulled Google events</label>
+    </div>
+    <p style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:var(--ink-soft);margin-top:4px;">Off by default — a class or assignment you've already synced won't show up twice (once as itself, once again as a pulled Google event).</p>
+    <div style="margin-top:16px;">
+      <label style="display:block;font-family:'IBM Plex Mono',monospace;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-soft);margin-bottom:6px;">Email reminders (fixed)</label>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        ${['1 week before','3 days before','48 hours before','24 hours before'].map(l=>`<span class="type-badge" style="background:var(--mustard);">${l}</span>`).join('')}
+      </div>
+    </div>
+    <p style="font-family:'IBM Plex Mono',monospace;font-size:0.72rem;color:var(--ink-soft);margin-top:16px;">
+      "Send to Calendar" creates a real, all-day event on the calendar above with all four email reminders attached automatically. Loading your calendar list once locks in the exact calendar so sync doesn't have to guess by name.
+    </p>
+  </div>`;
+}
+
+function attachHandlers(){
+  const addBtn = document.getElementById('addBtn');
+  if(addBtn) addBtn.onclick = openAddModal;
+
+  const addClassBtn = document.getElementById('addClassBtn');
+  if(addClassBtn) addClassBtn.onclick = openClassModal;
+
+  document.querySelectorAll('[data-class-tile]').forEach(tile=>{
+    tile.onclick = ()=>{
+      const c = state.courses.find(x=>x.id===tile.dataset.classTile);
+      if(c) openItemEditModal({kind:'class', ref:c});
+    };
+  });
+
+  document.querySelectorAll('[data-act]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const id = btn.dataset.id; const act = btn.dataset.act;
+      const a = state.assignments.find(x=>x.id===id);
+      if(act==='toggle'){ a.done = !a.done; await saveAssignments(); render(); }
+      else if(act==='del'){ state.assignments = state.assignments.filter(x=>x.id!==id); await saveAssignments(); render(); }
+      else if(act==='sync'){ await syncToCalendar(a); }
+    };
+  });
+
+  document.querySelectorAll('[data-cact]').forEach(btn=>{
+    btn.onclick = async (ev)=>{
+      ev.stopPropagation();
+      const id = btn.dataset.cid; const act = btn.dataset.cact;
+      const c = state.courses.find(x=>x.id===id);
+      if(act==='delClass'){ state.courses = state.courses.filter(x=>x.id!==id); await saveCourses(); render(); }
+      else if(act==='syncClass'){ await syncClassToCalendar(c); }
+    };
+  });
+
+  document.querySelectorAll('[data-class-card]').forEach(card=>{
+    card.onclick = ()=>{
+      const c = state.courses.find(x=>x.id===card.dataset.classCard);
+      if(c) openClassDetailModal(c);
+    };
+  });
+
+  const viewBtns = document.querySelectorAll('.view-switch button[data-view]');
+  viewBtns.forEach(b=>{
+    b.onclick = ()=>{
+      state.calView = b.dataset.view;
+      if(state.calView!=='month'){
+        // when entering an agenda view, anchor it near today (or keep existing anchor)
+        if(!state.calAnchor) state.calAnchor = new Date().toISOString().slice(0,10);
+      }
+      render();
+    };
+  });
+
+  const prevCal = document.getElementById('prevCal'), nextCal = document.getElementById('nextCal');
+  const shiftAnchor = (days)=>{
+    const d = new Date(state.calAnchor+'T00:00:00');
+    d.setDate(d.getDate()+days);
+    state.calAnchor = d.toISOString().slice(0,10);
+  };
+  if(prevCal) prevCal.onclick = ()=>{
+    if(state.calView==='month'){ const now=new Date(); let y=state.calY??now.getFullYear(), m=state.calM??now.getMonth(); m--; if(m<0){m=11;y--;} state.calY=y; state.calM=m; }
+    else { const step = state.calView==='day'?1:7; shiftAnchor(-step); }
+    render();
+  };
+  if(nextCal) nextCal.onclick = ()=>{
+    if(state.calView==='month'){ const now=new Date(); let y=state.calY??now.getFullYear(), m=state.calM??now.getMonth(); m++; if(m>11){m=0;y++;} state.calY=y; state.calM=m; }
+    else { const step = state.calView==='day'?1:7; shiftAnchor(step); }
+    render();
+  };
+
+  const calSyncAll = document.getElementById('calSyncAllBtn');
+  if(calSyncAll) calSyncAll.onclick = syncAllFromCalendarTab;
+
+  const calPull = document.getElementById('calPullBtn');
+  if(calPull) calPull.onclick = pullGoogleEvents;
+
+  const newEventBtn = document.getElementById('newEventBtn');
+  if(newEventBtn) newEventBtn.onclick = openNewEventModal;
+
+  document.querySelectorAll('[data-item-idx]').forEach(el=>{
+    el.onclick = ()=>{
+      const it = clickableItems[+el.dataset.itemIdx];
+      if(it) openItemEditModal(it);
+    };
+  });
+
+  const loadCals = document.getElementById('loadCalsBtn');
+  if(loadCals) loadCals.onclick = loadGoogleCalendars;
+
+  if(state.calendarOptions) renderCalPicker();
+
+  const dupToggle = document.getElementById('dupToggle');
+  if(dupToggle) dupToggle.onchange = async (e)=>{
+    state.settings.showSyncedDuplicates = e.target.checked;
+    await saveSettings();
+  };
+
+  const dz = document.getElementById('dropZone');
+  const fi = document.getElementById('fileInput');
+  if(dz){
+    dz.onclick = ()=>fi.click();
+    dz.ondragover = e=>{e.preventDefault(); dz.classList.add('drag');};
+    dz.ondragleave = ()=>dz.classList.remove('drag');
+    dz.ondrop = e=>{e.preventDefault(); dz.classList.remove('drag'); if(e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);};
+    fi.onchange = ()=>{ if(fi.files[0]) handleFile(fi.files[0]); };
+  }
+}
+
+// ---- Modal ----
+function openAddModal(){
+  const bg = document.createElement('div');
+  bg.className='modal-bg';
+  bg.innerHTML = `
+  <div class="modal">
+    <h3>New Assignment</h3>
+    <div class="field"><label>Title</label><input id="m_title" placeholder="Problem Set 4"></div>
+    <div class="field"><label>Course</label><input id="m_course" placeholder="ME 481" list="m_course_list">${courseDatalistHTML('m_course_list')}</div>
+    <div class="field"><label>Type</label>
+      <select id="m_type">
+        <option value="homework">Homework</option>
+        <option value="quiz">Quiz</option>
+        <option value="test">Test</option>
+        <option value="project">Project</option>
+        <option value="reading">Reading</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+    <div class="field"><label>Due date</label><input id="m_date" type="date"></div>
+    <div class="field"><label>Start time (optional)</label><input id="m_time" type="time"></div>
+    <div class="field"><label>End time (optional)</label><input id="m_endtime" type="time"></div>
+    <div class="field"><label>Location (optional)</label><input id="m_location" placeholder="GG Brown 1690, or Canvas"></div>
+    <div class="field"><label>Notes</label><textarea id="m_notes" placeholder="Chapters 4-5, bring calculator"></textarea></div>
+    <div class="row" style="margin-top:6px;">
+      <button class="btn secondary" id="m_cancel">Cancel</button>
+      <button class="btn stamp-btn" id="m_save">Add Entry</button>
+    </div>
+  </div>`;
+  document.body.appendChild(bg);
+  bg.querySelector('#m_cancel').onclick = ()=>bg.remove();
+  bg.querySelector('#m_save').onclick = async ()=>{
+    const title = bg.querySelector('#m_title').value.trim();
+    if(!title){ bg.querySelector('#m_title').style.borderColor='var(--stamp)'; return; }
+    state.assignments.push({
+      id: 'a'+Date.now()+Math.random().toString(36).slice(2,6),
+      title, course: bg.querySelector('#m_course').value.trim(),
+      type: bg.querySelector('#m_type').value,
+      date: bg.querySelector('#m_date').value,
+      time: bg.querySelector('#m_time').value,
+      endTime: bg.querySelector('#m_endtime').value,
+      location: bg.querySelector('#m_location').value.trim(),
+      notes: bg.querySelector('#m_notes').value.trim(),
+      done:false, synced:false
+    });
+    await saveAssignments();
+    bg.remove();
+    render();
+  };
+}
+
+// ---- Class schedule modal ----
+// ---- Notion-style course detail view: every property, click-to-edit, editable in place ----
+function openClassDetailModal(c){
+  const bg = document.createElement('div');
+  bg.className='modal-bg';
+  const linkedAssignments = state.assignments.filter(a=>a.course && c.name && a.course.toLowerCase()===c.name.toLowerCase());
+  bg.innerHTML = `
+  <div class="modal" style="max-width:460px;">
+    <div class="field"><label>Icon</label>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;" id="d_iconpicker">
+        ${CLASS_ICONS.map(ic=>`<span class="icon-swatch" data-icon="${ic}">${ic}</span>`).join('')}
+      </div>
+    </div>
+    <div class="field"><input id="d_name" value="${c.name||''}" style="font-family:'Zilla Slab',serif;font-size:1.4rem;font-weight:700;border:none;background:transparent;padding:0 0 8px;border-bottom:1px solid var(--line);"></div>
+
+    <div class="prop-row">
+      <div class="prop-label">↗ Assignments</div>
+      <div class="prop-value ${linkedAssignments.length===0?'empty':''}">${linkedAssignments.length===0?'None linked yet — course name must match on the assignment':linkedAssignments.map(a=>a.title).join(', ')}</div>
+    </div>
+    <div class="prop-row">
+      <div class="prop-label">🔗 Canvas Link</div>
+      <input id="d_canvas" value="${c.canvasLink||''}" placeholder="https://umich.instructure.com/courses/...">
+    </div>
+    <div class="prop-row">
+      <div class="prop-label">🎨 Color Tag</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-left:20px;" id="d_colorpicker">
+        ${COURSE_COLORS.map(col=>`<span class="color-swatch" data-color="${col}" style="background:${col};"></span>`).join('')}
+      </div>
+    </div>
+    <div class="prop-row">
+      <div class="prop-label"># Course Number</div>
+      <input id="d_number" value="${c.courseNumber||''}" placeholder="XX 000">
+    </div>
+    <div class="prop-row">
+      <div class="prop-label"># Credits</div>
+      <input id="d_credits" type="number" min="0" step="1" value="${c.credits||''}">
+    </div>
+    <div class="prop-row">
+      <div class="prop-label">≡ Description</div>
+      <textarea id="d_desc" placeholder="Short course description">${c.description||''}</textarea>
+    </div>
+    <div class="prop-row">
+      <div class="prop-label">⠿ Location</div>
+      <input id="d_loc" value="${c.location||''}" placeholder="Room 101">
+    </div>
+    <div class="prop-row">
+      <div class="prop-label">≡ Meeting Time</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-left:20px;margin-top:4px;">
+        ${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d=>`
+          <label style="display:flex;align-items:center;gap:4px;font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:var(--ink);">
+            <input type="checkbox" class="d_day" value="${d}" ${(c.days||[]).includes(d)?'checked':''}> ${d}
+          </label>`).join('')}
+      </div>
+      <div style="display:flex;gap:8px;margin-left:20px;margin-top:8px;">
+        <input id="d_start" type="time" value="${c.startTime||''}" style="width:auto;">
+        <input id="d_end" type="time" value="${c.endTime||''}" style="width:auto;">
+      </div>
+    </div>
+    <div class="prop-row">
+      <div class="prop-label">≡ Office Hours</div>
+      <input id="d_officehours" value="${c.officeHours||''}" placeholder="Mon/Wed 2-3pm">
+    </div>
+    <div class="prop-row">
+      <div class="prop-label">≡ Professor</div>
+      <input id="d_prof" value="${c.professor||''}" placeholder="Prof. Example">
+    </div>
+    <div class="prop-row">
+      <div class="prop-label">🛡 Quarter/Semester</div>
+      <input id="d_quarter" value="${c.quarter||''}" placeholder="Fall 2026">
+    </div>
+    <div class="prop-row">
+      <div class="prop-label">🛡 Term Ends</div>
+      <input id="d_end_date" type="date" value="${c.termEnds||''}">
+    </div>
+
+    <div class="row" style="margin-top:14px;">
+      <button class="btn secondary" id="d_delete" style="color:var(--stamp-dark);border-color:var(--stamp-dark);">Delete</button>
+      <div style="display:flex;gap:6px;">
+        <button class="btn secondary" id="d_cancel">Cancel</button>
+        <button class="btn stamp-btn" id="d_save">Save</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(bg);
+
+  let pickedColor = c.color || COURSE_COLORS[0];
+  let pickedIcon = c.icon || CLASS_ICONS[0];
+  const paintSwatches = ()=>{
+    bg.querySelectorAll('.color-swatch').forEach(sw=>{
+      sw.style.outline = sw.dataset.color===pickedColor ? '2px solid var(--ink)' : 'none';
+      sw.style.outlineOffset = '2px';
+    });
+    bg.querySelectorAll('.icon-swatch').forEach(sw=>{
+      sw.classList.toggle('picked', sw.dataset.icon===pickedIcon);
+    });
+  };
+  paintSwatches();
+  bg.querySelectorAll('.color-swatch').forEach(sw=>{
+    sw.onclick = ()=>{ pickedColor = sw.dataset.color; paintSwatches(); };
+  });
+  bg.querySelectorAll('.icon-swatch').forEach(sw=>{
+    sw.onclick = ()=>{ pickedIcon = sw.dataset.icon; paintSwatches(); };
+  });
+
+  bg.querySelector('#d_cancel').onclick = ()=>bg.remove();
+  bg.querySelector('#d_delete').onclick = async ()=>{
+    state.courses = state.courses.filter(x=>x.id!==c.id);
+    await saveCourses();
+    bg.remove(); render();
+    if(c.googleEventIds) deleteEventOnAllTargets(c.googleEventIds);
+  };
+  bg.querySelector('#d_save').onclick = async ()=>{
+    c.name = bg.querySelector('#d_name').value.trim() || c.name;
+    c.icon = pickedIcon;
+    c.canvasLink = bg.querySelector('#d_canvas').value.trim();
+    c.color = pickedColor;
+    c.courseNumber = bg.querySelector('#d_number').value.trim();
+    c.credits = bg.querySelector('#d_credits').value.trim();
+    c.description = bg.querySelector('#d_desc').value.trim();
+    c.location = bg.querySelector('#d_loc').value.trim();
+    c.days = [...bg.querySelectorAll('.d_day:checked')].map(el=>el.value);
+    c.startTime = bg.querySelector('#d_start').value;
+    c.endTime = bg.querySelector('#d_end').value;
+    c.officeHours = bg.querySelector('#d_officehours').value.trim();
+    c.professor = bg.querySelector('#d_prof').value.trim();
+    c.quarter = bg.querySelector('#d_quarter').value.trim();
+    c.termEnds = bg.querySelector('#d_end_date').value;
+    await saveCourses();
+    bg.remove(); render();
+    if(c.googleEventIds) updateEventOnAllTargets(c.googleEventIds, {title:`${c.name} (Class)`, date:new Date().toISOString().slice(0,10), time:c.startTime, endTime:c.endTime, location:c.location});
+  };
+}
+
+function openClassModal(){
+  const bg = document.createElement('div');
+  bg.className='modal-bg';
+  bg.innerHTML = `
+  <div class="modal">
+    <h3>New Class</h3>
+    <div class="field"><label>Icon</label>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;" id="c_iconpicker">
+        ${CLASS_ICONS.map(ic=>`<span class="icon-swatch" data-icon="${ic}">${ic}</span>`).join('')}
+      </div>
+    </div>
+    <div class="field"><label>Course name</label><input id="c_name" placeholder="ME 481"></div>
+    <div class="field"><label>Course number</label><input id="c_number" placeholder="ME 481"></div>
+    <div class="field"><label>Description</label><textarea id="c_desc" placeholder="Short course description"></textarea></div>
+    <div class="field"><label>Professor</label><input id="c_prof" placeholder="Prof. Example"></div>
+    <div class="field"><label>Credits</label><input id="c_credits" type="number" min="0" step="1" placeholder="4"></div>
+    <div class="field"><label>Meets on</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        ${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d=>`
+          <label style="display:flex;align-items:center;gap:4px;font-family:'IBM Plex Mono',monospace;font-size:0.75rem;">
+            <input type="checkbox" class="c_day" value="${d}"> ${d}
+          </label>`).join('')}
+      </div>
+    </div>
+    <div class="field"><label>Start time</label><input id="c_start" type="time"></div>
+    <div class="field"><label>End time</label><input id="c_end" type="time"></div>
+    <div class="field"><label>Office hours</label><input id="c_officehours" placeholder="Mon/Wed 2-3pm"></div>
+    <div class="field"><label>Location</label><input id="c_loc" placeholder="GG Brown 1690"></div>
+    <div class="field"><label>Canvas link</label><input id="c_canvas" placeholder="https://canvas...instructure.com/courses/..."></div>
+    <div class="field"><label>Quarter / Semester</label><input id="c_quarter" placeholder="Fall 2026"></div>
+    <div class="field"><label>Term ends</label><input id="c_end_date" type="date"></div>
+    <div class="field"><label>Color tag</label>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;" id="c_colorpicker">
+        ${COURSE_COLORS.map(col=>`<span class="color-swatch" data-color="${col}" style="background:${col};"></span>`).join('')}
+      </div>
+    </div>
+    <div class="row" style="margin-top:6px;">
+      <button class="btn secondary" id="c_cancel">Cancel</button>
+      <button class="btn stamp-btn" id="c_save">Add Class</button>
+    </div>
+  </div>`;
+  document.body.appendChild(bg);
+  let pickedColor = COURSE_COLORS[state.courses.length % COURSE_COLORS.length];
+  let pickedIcon = CLASS_ICONS[state.courses.length % CLASS_ICONS.length];
+  const paintSwatches = ()=>{
+    bg.querySelectorAll('.color-swatch').forEach(sw=>{
+      sw.style.outline = sw.dataset.color===pickedColor ? '2px solid var(--ink)' : 'none';
+      sw.style.outlineOffset = '2px';
+    });
+    bg.querySelectorAll('.icon-swatch').forEach(sw=>{
+      sw.classList.toggle('picked', sw.dataset.icon===pickedIcon);
+    });
+  };
+  paintSwatches();
+  bg.querySelectorAll('.color-swatch').forEach(sw=>{
+    sw.onclick = ()=>{ pickedColor = sw.dataset.color; paintSwatches(); };
+  });
+  bg.querySelectorAll('.icon-swatch').forEach(sw=>{
+    sw.onclick = ()=>{ pickedIcon = sw.dataset.icon; paintSwatches(); };
+  });
+  bg.querySelector('#c_cancel').onclick = ()=>bg.remove();
+  bg.querySelector('#c_save').onclick = async ()=>{
+    const name = bg.querySelector('#c_name').value.trim();
+    if(!name){ bg.querySelector('#c_name').style.borderColor='var(--stamp)'; return; }
+    const days = [...bg.querySelectorAll('.c_day:checked')].map(el=>el.value);
+    state.courses.push({
+      id: 'c'+Date.now()+Math.random().toString(36).slice(2,6),
+      name, days, startTime: bg.querySelector('#c_start').value, endTime: bg.querySelector('#c_end').value,
+      location: bg.querySelector('#c_loc').value.trim(), termEnds: bg.querySelector('#c_end_date').value,
+      icon: pickedIcon,
+      courseNumber: bg.querySelector('#c_number').value.trim(),
+      description: bg.querySelector('#c_desc').value.trim(),
+      professor: bg.querySelector('#c_prof').value.trim(),
+      credits: bg.querySelector('#c_credits').value.trim(),
+      officeHours: bg.querySelector('#c_officehours').value.trim(),
+      canvasLink: bg.querySelector('#c_canvas').value.trim(),
+      quarter: bg.querySelector('#c_quarter').value.trim(),
+      color: pickedColor, synced:false
+    });
+    await saveCourses();
+    bg.remove();
+    render();
+  };
+}
+
+
+async function handleFile(file){
+  const statusEl = document.getElementById('scanStatus');
+  statusEl.textContent = 'Reading file...';
+  let text = '';
+  try{
+    if(file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')){
+      const buf = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({data: buf}).promise;
+      for(let p=1; p<=pdf.numPages; p++){
+        const page = await pdf.getPage(p);
+        const content = await page.getTextContent();
+        text += content.items.map(i=>i.str).join(' ') + '\n';
+      }
+    } else {
+      text = await file.text();
+    }
+  }catch(e){
+    statusEl.textContent = 'Could not read that file. Try a PDF or .txt syllabus.';
+    return;
+  }
+  if(!text.trim()){ statusEl.textContent = 'No readable text found in that file.'; return; }
+  statusEl.textContent = 'Scanning for quizzes, tests, and due dates...';
+  await extractDates(text.slice(0, 15000), statusEl);
+}
+
+async function extractDates(text, statusEl){
+  const today = new Date().toISOString().slice(0,10);
+  try{
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        model:'claude-sonnet-4-6',
+        max_tokens: 1000,
+        messages:[{role:'user', content:
+          `Today's date is ${today}. Extract every dated academic item (homework, problem sets, quizzes, tests, exams, projects, papers, readings with a due date) from this syllabus text. `+
+          `Respond with ONLY a JSON array, no prose, no markdown fences. Each item: {"title":string,"course":string (best guess of course name/code or ""),"type": one of "homework","quiz","test","project","reading","other","date":"YYYY-MM-DD" (resolve to an actual date; if only a weekday/relative date is given and year is ambiguous, use the most sensible upcoming year based on today's date; if no date can be determined, omit the item),"time":"HH:MM" in 24-hour format (only if the syllabus states a specific due time or class/exam start time; omit or use "" if no time is given),"endTime":"HH:MM" in 24-hour format (only if an explicit end time is stated, e.g. an exam window; omit or use "" otherwise),"location":string (room/building if stated, e.g. an exam location; omit or use "" otherwise),"notes":string (brief, optional)}.\n\nSYLLABUS TEXT:\n${text}`
+        }]
+      })
+    });
+    const data = await resp.json();
+    const textBlocks = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n');
+    const cleaned = textBlocks.replace(/```json|```/g,'').trim();
+    let items;
+    try{ items = JSON.parse(cleaned); }
+    catch(e){
+      const match = cleaned.match(/\[[\s\S]*\]/);
+      items = match ? JSON.parse(match[0]) : [];
+    }
+    if(!Array.isArray(items) || items.length===0){
+      statusEl.textContent = 'No dated items found. You can still add assignments manually.';
+      return;
+    }
+    statusEl.textContent = `Found ${items.length} item(s). Review and select what to add:`;
+    renderScanResults(items);
+  }catch(e){
+    statusEl.textContent = 'Something went wrong reading dates from that file. You can add assignments manually instead.';
+  }
+}
+
+function renderScanResults(items){
+  const host = document.getElementById('scanResults');
+  host.innerHTML = `
+    ${items.map((it,i)=>`
+      <div class="scan-item">
+        <input type="checkbox" checked id="si_${i}">
+        <div style="flex:1;">
+          <div class="si-title">${it.title||'Untitled item'}</div>
+          <div class="si-meta">${it.course||'—'} · ${it.type||'other'} · ${it.date||'no date'}${it.time?' · '+fmtTime(it.time)+(it.endTime?'–'+fmtTime(it.endTime):''):''}${it.location?' · '+it.location:''}${it.notes?' · '+it.notes:''}</div>
+        </div>
+      </div>`).join('')}
+    <div class="row" style="margin-top:14px;">
+      <span></span>
+      <button class="btn stamp-btn" id="importBtn">Add selected to tracker</button>
+    </div>`;
+  document.getElementById('importBtn').onclick = async ()=>{
+    items.forEach((it,i)=>{
+      if(document.getElementById(`si_${i}`).checked){
+        state.assignments.push({
+          id:'a'+Date.now()+Math.random().toString(36).slice(2,6),
+          title: it.title||'Untitled item', course: it.course||'', type: it.type||'other',
+          date: it.date||'', time: it.time||'', endTime: it.endTime||'', location: it.location||'',
+          notes: it.notes||'', done:false, synced:false
+        });
+      }
+    });
+    await saveAssignments();
+    state.tab = 'cards';
+    render();
+  };
+}
+
+// ---- Live Google Calendar list ----
+async function loadGoogleCalendars(){
+  const host = document.getElementById('calPickerHost');
+  host.innerHTML = `<div class="status-line">Fetching your Google calendars...</div>`;
+  try{
+    const resp = await fetch(`${CALSYNC_URL}/calendars`, {
+      headers: { Authorization: `Bearer ${SUPABASE_KEY}` }
+    });
+    const data = await resp.json();
+    if(!resp.ok || !data.calendars){
+      host.innerHTML = `<div class="status-line">Couldn't read your calendar list: ${data.error||'unknown error'}. Check that Google Calendar is connected, then try again.</div>`;
+      return;
+    }
+    state.calendarOptions = data.calendars.map(c=>({id:c.id, name:c.name, color:c.color||''}));
+    renderCalPicker();
+  }catch(e){
+    host.innerHTML = `<div class="status-line">Something went wrong loading your calendars.</div>`;
+  }
+}
+
+function renderCalPicker(){
+  const host = document.getElementById('calPickerHost');
+  if(!host || !state.calendarOptions) return;
+  const selectedIds = new Set(getSyncTargets().map(c=>c.id).filter(Boolean));
+  host.innerHTML = `
+    <label style="display:block;font-family:'IBM Plex Mono',monospace;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-soft);margin-bottom:6px;">Sync to (pick one or more)</label>
+    <div style="display:flex;flex-direction:column;gap:6px;">
+      ${state.calendarOptions.map(c=>`
+        <label style="display:flex;align-items:center;gap:8px;font-family:'Inter',sans-serif;font-size:0.85rem;color:var(--ink);">
+          <input type="checkbox" class="cal-pick" value="${c.id}" data-name="${c.name}" data-color="${c.color||''}" ${selectedIds.has(c.id)?'checked':''}>
+          ${c.color?`<span style="width:9px;height:9px;border-radius:2px;background:${c.color};display:inline-block;"></span>`:''}
+          ${c.name}
+        </label>`).join('')}
+    </div>`;
+  host.querySelectorAll('.cal-pick').forEach(cb=>{
+    cb.onchange = async ()=>{
+      const checked = [...host.querySelectorAll('.cal-pick:checked')].map(el=>({id:el.value, name:el.dataset.name, color:el.dataset.color||''}));
+      state.settings.calendars = checked;
+      // clear legacy single-calendar fields so getSyncTargets reads the new list
+      state.settings.calendarId = checked[0]?.id || '';
+      state.settings.calendarName = checked.map(c=>c.name).join(', ') || state.settings.calendarName;
+      state.googleEvents = {};
+      state.googleLoadedMonths = {};
+      state.googleEventsYearLoaded = false;
+      await saveSettings();
+      render();
+    };
+  });
+}
+
+// ---- Pull existing events FROM Google Calendar for the currently viewed month ----
+function currentRefMonth(){
+  // which year/month is "in view" right now, based on the active calendar view
+  if(state.calView==='month'){
+    const now = new Date();
+    return { y: state.calY ?? now.getFullYear(), m: state.calM ?? now.getMonth() };
+  }
+  const d = new Date((state.calAnchor || new Date().toISOString().slice(0,10))+'T00:00:00');
+  return { y: d.getFullYear(), m: d.getMonth() };
+}
+
+async function pullGoogleEvents(){
+  const { y, m } = currentRefMonth();
+  const monthKey = `${y}-${m}`;
+  const monthLabel = new Date(y,m,1).toLocaleDateString('en-US',{month:'long',year:'numeric'});
+  const start = `${y}-${String(m+1).padStart(2,'0')}-01`;
+  const endDate = new Date(y, m+1, 0);
+  const end = `${y}-${String(m+1).padStart(2,'0')}-${String(endDate.getDate()).padStart(2,'0')}`;
+  const statusEl = document.getElementById('calPullStatus');
+  const btn = document.getElementById('calPullBtn');
+  const targets = getSyncTargets();
+  state.googleYearLoading = true;
+  if(statusEl) statusEl.textContent = `Loading ${monthLabel} from Google (${targets.length} calendar${targets.length>1?'s':''})...`;
+  if(btn) btn.disabled = true;
+  let events = [];
+  let anyOk = false;
+  for(const target of targets){
+    const calKey = target.id || target.name;
+    try{
+      const q = new URLSearchParams({ calendarId: target.id || 'primary', timeMin: `${start}T00:00:00Z`, timeMax: `${end}T23:59:59Z` });
+      const resp = await fetch(`${CALSYNC_URL}/events?${q.toString()}`, {
+        headers: { Authorization: `Bearer ${SUPABASE_KEY}` }
+      });
+      const data = await resp.json();
+      if(resp.ok && Array.isArray(data.events)){
+        anyOk = true;
+        data.events.forEach(e=>{
+          const rawStart = e.start?.dateTime || e.start?.date;
+          if(!rawStart) return;
+          const iso = String(rawStart).slice(0,10);
+          const hasTime = String(rawStart).includes('T');
+          const time = hasTime ? String(rawStart).slice(11,16) : '';
+          const rawEnd = e.end?.dateTime || e.end?.date || '';
+          const endTime = (rawEnd && String(rawEnd).includes('T')) ? String(rawEnd).slice(11,16) : '';
+          const location = e.location || '';
+          const gid = e.id || '';
+          const color = e.colorId ? GOOGLE_COLOR_MAP[e.colorId] : (target.color || '#4285F4');
+          events.push({ id: gid, calendarKey: calKey, calendarName: target.name, title: e.summary || 'Untitled event', date: iso, time, endTime, location, color });
+        });
+      }
+    }catch(e){ /* keep going with the other calendars */ }
+  }
+  if(anyOk){
+    state.googleEvents[monthKey] = events;
+    state.googleLoadedMonths = state.googleLoadedMonths || {};
+    state.googleLoadedMonths[monthKey] = true;
+    state.googleEventsYearLoaded = true; // reused as "has loaded at least one month" flag
+    if(events.length===0 && statusEl) statusEl.textContent = `No events found on Google for ${monthLabel} (or none could be read).`;
+  } else if(statusEl){
+    statusEl.textContent = 'Could not fetch events from Google Calendar. Check your connection and try again.';
+  }
+  state.googleYearLoading = false;
+  render();
+}
+
+
+async function syncAllFromCalendarTab(){
+  const pendingAssignments = state.assignments.filter(a=>!a.synced);
+  const pendingClasses = state.courses.filter(c=>!c.synced);
+  const total = pendingAssignments.length + pendingClasses.length;
+  const setStatus = (txt)=>{ const el = document.getElementById('calSyncStatus'); if(el) el.textContent = txt; };
+  if(total===0){ setStatus('Nothing to sync.'); return; }
+  let done = 0;
+  for(const c of pendingClasses){
+    setStatus(`Syncing ${++done}/${total}: ${c.name} (class)...`);
+    await syncClassToCalendar(c);
+  }
+  for(const a of pendingAssignments){
+    setStatus(`Syncing ${++done}/${total}: ${a.title}...`);
+    await syncToCalendar(a);
+  }
+  setStatus(`Done — synced ${total} item(s) to ${state.settings.calendarName}.`);
+}
+
+
+async function updateEventOnTarget(target, eventId, fields){
+  if(!eventId) return false;
+  try{
+    const resp = await fetch(CALSYNC_URL+'/events', {
+      method:'PATCH',
+      headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${SUPABASE_KEY}` },
+      body: JSON.stringify({
+        calendarId: target.id || 'primary', eventId,
+        title: fields.title, date: fields.date, time: fields.time, endTime: fields.endTime,
+        location: fields.location, notes: fields.notes
+      })
+    });
+    return resp.ok;
+  }catch(e){ return false; }
+}
+
+async function deleteEventOnTarget(target, eventId){
+  if(!eventId) return false;
+  try{
+    const resp = await fetch(CALSYNC_URL+'/events', {
+      method:'DELETE',
+      headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${SUPABASE_KEY}` },
+      body: JSON.stringify({ calendarId: target.id || 'primary', eventId })
+    });
+    return resp.ok;
+  }catch(e){ return false; }
+}
+
+function repeatToRRule(repeat){
+  if(!repeat || repeat==='none') return undefined;
+  const freq = {daily:'DAILY', weekly:'WEEKLY', monthly:'MONTHLY'}[repeat];
+  return freq ? `RRULE:FREQ=${freq}` : undefined;
+}
+
+async function createEventOnTarget(target, fields){
+  try{
+    const resp = await fetch(CALSYNC_URL+'/events', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${SUPABASE_KEY}` },
+      body: JSON.stringify({
+        calendarId: target.id || 'primary', title: fields.title, date: fields.date,
+        time: fields.time, endTime: fields.endTime, allDay: fields.allDay,
+        location: fields.location, notes: fields.notes,
+        reminders: fields.reminders, recurrence: fields.recurrence || repeatToRRule(fields.repeat)
+      })
+    });
+    const data = await resp.json();
+    if(resp.ok && data.id) return { ok:true, id: data.id };
+    return { ok:false, id:'' };
+  }catch(e){ return { ok:false, id:'' }; }
+}
+
+// ---- Multi-calendar wrappers: fan a single logical action out across every configured calendar ----
+async function createEventOnAllTargets(fields){
+  const targets = getSyncTargets();
+  const ids = {};
+  let successCount = 0;
+  for(const t of targets){
+    const key = t.id || t.name;
+    const r = await createEventOnTarget(t, fields);
+    if(r.ok){ ids[key] = r.id; successCount++; }
+  }
+  return { ids, successCount, total: targets.length };
+}
+
+async function updateEventOnAllTargets(idsMap, fields){
+  if(!idsMap) return { successCount:0, total:0 };
+  const entries = Object.entries(idsMap);
+  const targets = getSyncTargets();
+  let successCount = 0;
+  for(const [key, eventId] of entries){
+    const target = targets.find(t=>(t.id||t.name)===key) || {id:key, name:key};
+    const ok = await updateEventOnTarget(target, eventId, fields);
+    if(ok) successCount++;
+  }
+  return { successCount, total: entries.length };
+}
+
+async function deleteEventOnAllTargets(idsMap){
+  if(!idsMap) return { successCount:0, total:0 };
+  const entries = Object.entries(idsMap);
+  const targets = getSyncTargets();
+  let successCount = 0;
+  for(const [key, eventId] of entries){
+    const target = targets.find(t=>(t.id||t.name)===key) || {id:key, name:key};
+    const ok = await deleteEventOnTarget(target, eventId);
+    if(ok) successCount++;
+  }
+  return { successCount, total: entries.length };
+}
+
+
+// ---- Quick "New Event" modal, styled after Google Calendar's own quick-create ----
+function openNewEventModal(){
+  const todayIso = state.calAnchor || new Date().toISOString().slice(0,10);
+  const bg = document.createElement('div');
+  bg.className='modal-bg';
+  bg.innerHTML = `
+  <div class="modal">
+    <h3 style="margin-bottom:14px;">New Event</h3>
+    <div class="field"><input id="ne_title" placeholder="Add title" style="font-size:1.05rem;padding:10px;"></div>
+    <div class="field" style="display:flex;align-items:center;gap:8px;margin-top:2px;">
+      <input type="checkbox" id="ne_allday" style="width:auto;">
+      <label style="margin:0;text-transform:none;font-family:'Inter',sans-serif;font-size:0.85rem;color:var(--ink);">All day</label>
+    </div>
+    <div class="field"><label>Date</label><input id="ne_date" type="date" value="${todayIso}"></div>
+    <div id="ne_timerow" style="display:flex;gap:8px;">
+      <div class="field" style="flex:1;"><label>Start time</label><input id="ne_start" type="time" value="09:00"></div>
+      <div class="field" style="flex:1;"><label>End time</label><input id="ne_end" type="time" value="10:00"></div>
+    </div>
+    <div class="field"><label>Repeat</label>
+      <select id="ne_repeat">
+        <option value="none">Does not repeat</option>
+        <option value="daily">Daily</option>
+        <option value="weekly">Weekly</option>
+        <option value="monthly">Monthly</option>
+      </select>
+    </div>
+    <div class="field"><label>Location (optional)</label><input id="ne_loc" placeholder="Add location"></div>
+    <div class="field"><label>Description (optional)</label><textarea id="ne_notes" placeholder="Add description"></textarea></div>
+    <div class="row" style="margin-top:6px;">
+      <button class="btn secondary" id="ne_cancel">Cancel</button>
+      <button class="btn stamp-btn" id="ne_save">Save</button>
+    </div>
+    <div class="status-line" id="ne_status"></div>
+  </div>`;
+  document.body.appendChild(bg);
+  bg.querySelector('#ne_cancel').onclick = ()=>bg.remove();
+  bg.querySelector('#ne_allday').onchange = (e)=>{
+    document.getElementById('ne_timerow').style.display = e.target.checked ? 'none' : 'flex';
+  };
+  bg.querySelector('#ne_save').onclick = async ()=>{
+    const title = bg.querySelector('#ne_title').value.trim();
+    if(!title){ bg.querySelector('#ne_title').style.borderColor='var(--stamp)'; return; }
+    const allDay = bg.querySelector('#ne_allday').checked;
+    const date = bg.querySelector('#ne_date').value;
+    const time = allDay ? '' : bg.querySelector('#ne_start').value;
+    const endTime = allDay ? '' : bg.querySelector('#ne_end').value;
+    const repeat = bg.querySelector('#ne_repeat').value;
+    const location = bg.querySelector('#ne_loc').value.trim();
+    const notes = bg.querySelector('#ne_notes').value.trim();
+    const statusEl = bg.querySelector('#ne_status');
+    statusEl.textContent = 'Saving to Google Calendar...';
+    bg.querySelector('#ne_save').disabled = true;
+    const result = await createEventOnAllTargets({title, date, time, endTime, allDay, repeat, location, notes});
+    if(result.successCount>0){
+      const [y,mo] = date.split('-').map(Number);
+      const monthKey = `${y}-${mo-1}`;
+      state.googleEvents[monthKey] = state.googleEvents[monthKey] || [];
+      Object.entries(result.ids).forEach(([calKey,eventId])=>{
+        const target = getSyncTargets().find(t=>(t.id||t.name)===calKey);
+        state.googleEvents[monthKey].push({ id: eventId, calendarKey: calKey, calendarName: target?.name||'', title, date, time, endTime, location, color: target?.color||'#4285F4' });
+      });
+      bg.remove();
+      render();
+      if(result.successCount < result.total) alert(`Saved to ${result.successCount} of ${result.total} calendars — check the others.`);
+    } else {
+      statusEl.textContent = 'Could not save this event to Google Calendar. Try again.';
+      bg.querySelector('#ne_save').disabled = false;
+    }
+  };
+}
+
+
+// ---- Click-to-edit modal for any calendar item (class, assignment, or a pulled Google event) ----
+function openItemEditModal(item){
+  const { kind, ref } = item;
+  const bg = document.createElement('div');
+  bg.className='modal-bg';
+
+  if(kind==='class'){
+    openClassDetailModal(ref);
+    return;
+  }
+
+  if(kind==='assignment'){
+    bg.innerHTML = `
+    <div class="modal">
+      <h3>Edit Assignment</h3>
+      <div class="field"><label>Title</label><input id="e_title" value="${ref.title||''}"></div>
+      <div class="field"><label>Course</label><input id="e_course" value="${ref.course||''}" list="e_course_list">${courseDatalistHTML('e_course_list')}</div>
+      <div class="field"><label>Type</label>
+        <select id="e_type">
+          ${['homework','quiz','test','project','reading','other'].map(t=>`<option value="${t}" ${ref.type===t?'selected':''}>${t.charAt(0).toUpperCase()+t.slice(1)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field"><label>Due date</label><input id="e_date" type="date" value="${ref.date||''}"></div>
+      <div class="field"><label>Start time (optional)</label><input id="e_time" type="time" value="${ref.time||''}"></div>
+      <div class="field"><label>End time (optional)</label><input id="e_endtime" type="time" value="${ref.endTime||''}"></div>
+      <div class="field"><label>Location (optional)</label><input id="e_loc" value="${ref.location||''}"></div>
+      <div class="field"><label>Notes</label><textarea id="e_notes">${ref.notes||''}</textarea></div>
+      <div class="row" style="margin-top:6px;">
+        <button class="btn secondary" id="e_delete" style="color:var(--stamp-dark);border-color:var(--stamp-dark);">Delete</button>
+        <div style="display:flex;gap:6px;">
+          <button class="btn secondary" id="e_cancel">Cancel</button>
+          <button class="btn stamp-btn" id="e_save">Save</button>
+        </div>
+      </div>
+    </div>`;
+    document.body.appendChild(bg);
+    bg.querySelector('#e_cancel').onclick = ()=>bg.remove();
+    bg.querySelector('#e_delete').onclick = async ()=>{
+      state.assignments = state.assignments.filter(a=>a.id!==ref.id);
+      await saveAssignments();
+      bg.remove(); render();
+      if(ref.googleEventIds) deleteEventOnAllTargets(ref.googleEventIds);
+    };
+    bg.querySelector('#e_save').onclick = async ()=>{
+      ref.title = bg.querySelector('#e_title').value.trim();
+      ref.course = bg.querySelector('#e_course').value.trim();
+      ref.type = bg.querySelector('#e_type').value;
+      ref.date = bg.querySelector('#e_date').value;
+      ref.time = bg.querySelector('#e_time').value;
+      ref.endTime = bg.querySelector('#e_endtime').value;
+      ref.location = bg.querySelector('#e_loc').value.trim();
+      ref.notes = bg.querySelector('#e_notes').value.trim();
+      await saveAssignments();
+      bg.remove(); render();
+      if(ref.googleEventIds) updateEventOnAllTargets(ref.googleEventIds, {title:`${ref.title}${ref.course?' — '+ref.course:''}`, date:ref.date, time:ref.time, endTime:ref.endTime, location:ref.location, notes:ref.notes});
+    };
+    return;
+  }
+
+  // kind === 'google' — a live event pulled straight from Google, not tracked locally
+  bg.innerHTML = `
+  <div class="modal">
+    <h3>Edit Google Event</h3>
+    <p style="font-family:'IBM Plex Mono',monospace;font-size:0.7rem;color:var(--ink-soft);">This event lives on your Google Calendar, not in the tracker. Changes here update it directly.</p>
+    <div class="field"><label>Title</label><input id="e_title" value="${ref.title||''}"></div>
+    <div class="field"><label>Date</label><input id="e_date" type="date" value="${ref.date||''}"></div>
+    <div class="field"><label>Start time (optional)</label><input id="e_time" type="time" value="${ref.time||''}"></div>
+    <div class="field"><label>End time (optional)</label><input id="e_endtime" type="time" value="${ref.endTime||''}"></div>
+    <div class="field"><label>Location (optional)</label><input id="e_loc" value="${ref.location||''}"></div>
+    <div class="row" style="margin-top:6px;">
+      <button class="btn secondary" id="e_delete" style="color:var(--stamp-dark);border-color:var(--stamp-dark);" ${ref.id?'':'disabled'}>Delete</button>
+      <div style="display:flex;gap:6px;">
+        <button class="btn secondary" id="e_cancel">Cancel</button>
+        <button class="btn stamp-btn" id="e_save" ${ref.id?'':'disabled'}>Save</button>
+      </div>
+    </div>
+    ${ref.calendarName?`<p style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:var(--ink-soft);">On calendar: ${ref.calendarName}</p>`:''}
+    ${ref.id?'':'<p style="font-family:\'IBM Plex Mono\',monospace;font-size:0.68rem;color:var(--stamp-dark);">No event ID available for this item — try refreshing this month from Google first.</p>'}
+  </div>`;
+  document.body.appendChild(bg);
+  bg.querySelector('#e_cancel').onclick = ()=>bg.remove();
+  const sourceTarget = getSyncTargets().find(t=>(t.id||t.name)===ref.calendarKey) || {id: ref.calendarKey, name: ref.calendarName || ref.calendarKey};
+  bg.querySelector('#e_delete').onclick = async ()=>{
+    const ok = await deleteEventOnTarget(sourceTarget, ref.id);
+    if(ok){
+      const monthKey = ref.date ? `${ref.date.slice(0,4)}-${parseInt(ref.date.slice(5,7))-1}` : null;
+      if(monthKey && state.googleEvents[monthKey]) state.googleEvents[monthKey] = state.googleEvents[monthKey].filter(e=>e!==ref);
+    }
+    bg.remove(); render();
+  };
+  bg.querySelector('#e_save').onclick = async ()=>{
+    ref.title = bg.querySelector('#e_title').value.trim();
+    ref.date = bg.querySelector('#e_date').value;
+    ref.time = bg.querySelector('#e_time').value;
+    ref.endTime = bg.querySelector('#e_endtime').value;
+    ref.location = bg.querySelector('#e_loc').value.trim();
+    await updateEventOnTarget(sourceTarget, ref.id, {title:ref.title, date:ref.date, time:ref.time, endTime:ref.endTime, location:ref.location});
+    bg.remove(); render();
+  };
+}
+
+
+async function syncClassToCalendar(c){
+  if(c.synced && !c.syncError) return; // dedupe guard: don't re-sync a class that's already fully synced
+  const btn = [...document.querySelectorAll('[data-cid="'+c.id+'"][data-cact="syncClass"]')][0];
+  if(btn){ btn.textContent = 'Syncing...'; btn.disabled = true; }
+  const daysMap = {Sun:'SU',Mon:'MO',Tue:'TU',Wed:'WE',Thu:'TH',Fri:'FR',Sat:'SA'};
+  const byday = (c.days||[]).map(d=>daysMap[d]).filter(Boolean).join(',');
+  const targets = getSyncTargets();
+  const ids = {};
+  let successCount = 0;
+  // find the next upcoming occurrence of this class's weekday to anchor the recurring event's start date
+  const today = new Date();
+  const dayNums = {Sun:0,Mon:1,Tue:2,Wed:3,Thu:4,Fri:5,Sat:6};
+  const targetDays = (c.days||[]).map(d=>dayNums[d]).filter(n=>n!==undefined);
+  let anchor = new Date(today);
+  for(let i=0;i<7;i++){
+    if(targetDays.includes(anchor.getDay())) break;
+    anchor.setDate(anchor.getDate()+1);
+  }
+  const anchorDate = anchor.toISOString().slice(0,10);
+  const untilPart = c.termEnds ? `;UNTIL=${c.termEnds.replace(/-/g,'')}T235959Z` : '';
+  const recurrence = byday ? `RRULE:FREQ=WEEKLY;BYDAY=${byday}${untilPart}` : undefined;
+
+  for(const target of targets){
+    const r = await createEventOnTarget(target, {
+      title: `${c.name} (Class)`, date: anchorDate, time: c.startTime || '09:00', endTime: c.endTime || '10:00',
+      location: c.location || '', recurrence
+    });
+    if(r.ok){ ids[target.id||target.name] = r.id; successCount++; }
+  }
+  if(successCount>0){
+    c.synced = true;
+    c.syncError = successCount < targets.length;
+    c.googleEventIds = ids;
+    await saveCourses();
+  } else {
+    c.syncError = true;
+  }
+  render();
+}
+
+
+async function syncToCalendar(a){
+  const card = [...document.querySelectorAll('[data-id="'+a.id+'"][data-act="sync"]')][0];
+  if(card){ card.textContent = 'Syncing...'; card.disabled = true; }
+  const targets = getSyncTargets();
+  const ids = {};
+  let successCount = 0;
+  const REMINDER_MINUTES = [10080, 4320, 2880, 1440]; // 1wk, 3d, 48h, 24h before
+
+  for(const target of targets){
+    const r = await createEventOnTarget(target, {
+      title: `${a.title}${a.course ? ' — '+a.course : ''}`,
+      date: a.date || new Date().toISOString().slice(0,10),
+      time: a.time || '', endTime: a.time ? (a.endTime || a.time) : '',
+      allDay: !a.time,
+      location: a.location || '',
+      notes: `${a.notes||''} (Type: ${a.type})`,
+      reminders: REMINDER_MINUTES
+    });
+    if(r.ok){ ids[target.id||target.name] = r.id; successCount++; }
+  }
+  if(successCount>0){
+    a.synced = true;
+    a.syncError = successCount < targets.length;
+    a.googleEventIds = ids;
+    await saveAssignments();
+  } else {
+    a.syncError = true;
+  }
+  render();
+}
+
+loadState();
+</script>
+</body>
+</html>

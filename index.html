@@ -985,30 +985,19 @@ async function handleFile(file){
 }
 
 async function extractDates(text, statusEl){
-  const today = new Date().toISOString().slice(0,10);
   try{
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    const resp = await fetch(`${SUPABASE_URL}/functions/v1/scan-syllabus`, {
       method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({
-        model:'claude-sonnet-4-6',
-        max_tokens: 1000,
-        messages:[{role:'user', content:
-          `Today's date is ${today}. Extract every dated academic item (homework, problem sets, quizzes, tests, exams, projects, papers, readings with a due date) from this syllabus text. `+
-          `Respond with ONLY a JSON array, no prose, no markdown fences. Each item: {"title":string,"course":string (best guess of course name/code or ""),"type": one of "homework","quiz","test","project","reading","other","date":"YYYY-MM-DD" (resolve to an actual date; if only a weekday/relative date is given and year is ambiguous, use the most sensible upcoming year based on today's date; if no date can be determined, omit the item),"time":"HH:MM" in 24-hour format (only if the syllabus states a specific due time or class/exam start time; omit or use "" if no time is given),"endTime":"HH:MM" in 24-hour format (only if an explicit end time is stated, e.g. an exam window; omit or use "" otherwise),"location":string (room/building if stated, e.g. an exam location; omit or use "" otherwise),"notes":string (brief, optional)}.\n\nSYLLABUS TEXT:\n${text}`
-        }]
-      })
+      headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${SUPABASE_KEY}` },
+      body: JSON.stringify({ text })
     });
     const data = await resp.json();
-    const textBlocks = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n');
-    const cleaned = textBlocks.replace(/```json|```/g,'').trim();
-    let items;
-    try{ items = JSON.parse(cleaned); }
-    catch(e){
-      const match = cleaned.match(/\[[\s\S]*\]/);
-      items = match ? JSON.parse(match[0]) : [];
+    const items = Array.isArray(data.items) ? data.items : [];
+    if(!resp.ok){
+      statusEl.textContent = `Scan failed: ${data.error || 'unknown error'}. You can still add assignments manually.`;
+      return;
     }
-    if(!Array.isArray(items) || items.length===0){
+    if(items.length===0){
       statusEl.textContent = 'No dated items found. You can still add assignments manually.';
       return;
     }

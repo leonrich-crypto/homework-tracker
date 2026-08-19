@@ -78,15 +78,16 @@
   .btn:disabled{opacity:0.4;cursor:default;}
   .btn:disabled:hover{box-shadow:none;}
 
-  .analytics-bar{display:flex;align-items:center;gap:22px;flex-wrap:wrap;padding:14px 16px;margin-bottom:18px;background:var(--card-raised);border:1px solid var(--line);border-radius:10px;}
-  .analytics-stat{text-align:center;min-width:52px;}
+  .analytics-bar{display:flex;align-items:center;gap:28px;flex-wrap:wrap;padding:16px 20px;margin-bottom:18px;background:var(--card-raised);border:1px solid var(--line);border-radius:10px;}
+  .analytics-ring-wrap{position:relative;width:140px;height:140px;flex-shrink:0;}
+  .analytics-ring-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+  .analytics-ring-pct{font-family:'Zilla Slab',serif;font-weight:700;font-size:1.8rem;color:var(--ink);line-height:1;}
+  .analytics-ring-frac{font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:var(--ink-soft);margin-top:4px;}
+  .analytics-stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px 28px;flex:1;min-width:180px;}
+  .analytics-stat{text-align:left;}
   .analytics-num{font-family:'Zilla Slab',serif;font-weight:700;font-size:1.5rem;line-height:1;color:var(--ink);}
   .analytics-stat[style*="color"] .analytics-num{color:inherit;}
   .analytics-label{font-family:'IBM Plex Mono',monospace;font-size:0.62rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-soft);margin-top:3px;}
-  .analytics-progress-wrap{flex:1;min-width:140px;}
-  .analytics-progress-label{font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:var(--ink-soft);margin-bottom:5px;}
-  .analytics-progress-track{height:8px;background:var(--paper);border-radius:5px;overflow:hidden;border:1px solid var(--line);}
-  .analytics-progress-fill{height:100%;background:linear-gradient(90deg,var(--mustard),var(--green));border-radius:5px;transition:width .3s ease;}
   .cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px;}
   .tiles-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;}
   .tile{position:relative;border-radius:8px;overflow:hidden;aspect-ratio:4/3;cursor:pointer;background:var(--card-raised);border:1px solid var(--line);}
@@ -365,34 +366,52 @@ function renderCards(){
   const overdue = state.assignments.filter(a=>!a.done && a.date && daysUntil(a.date)<0).length;
   const dueSoon = state.assignments.filter(a=>!a.done && a.date && daysUntil(a.date)>=0 && daysUntil(a.date)<=3).length;
   const pct = total>0 ? Math.round((completed/total)*100) : 0;
+  const R = 54, C = 2*Math.PI*R;
+  const dashOffset = C - (pct/100)*C;
 
   return `
   <div class="panel">
     ${total>0 ? `
     <div class="analytics-bar">
-      <div class="analytics-stat">
-        <div class="analytics-num">${total}</div>
-        <div class="analytics-label">Total</div>
+      <div class="analytics-ring-wrap">
+        <svg width="140" height="140" viewBox="0 0 140 140">
+          <circle cx="70" cy="70" r="${R}" fill="none" stroke="var(--paper)" stroke-width="14"/>
+          <circle cx="70" cy="70" r="${R}" fill="none" stroke="url(#ringGrad)" stroke-width="14"
+            stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${dashOffset}"
+            transform="rotate(-90 70 70)" style="transition:stroke-dashoffset .4s ease;"/>
+          <defs>
+            <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" style="stop-color:var(--mustard);"/>
+              <stop offset="100%" style="stop-color:var(--green);"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        <div class="analytics-ring-center">
+          <div class="analytics-ring-pct">${pct}%</div>
+          <div class="analytics-ring-frac">${completed}/${total}</div>
+        </div>
       </div>
-      <div class="analytics-stat" style="color:var(--green);">
-        <div class="analytics-num">${completed}</div>
-        <div class="analytics-label">Completed</div>
-      </div>
-      <div class="analytics-stat" style="color:var(--blue-text);">
-        <div class="analytics-num">${open}</div>
-        <div class="analytics-label">Open</div>
-      </div>
-      <div class="analytics-stat" style="color:${overdue>0?'var(--stamp-dark)':'var(--ink-soft)'};">
-        <div class="analytics-num">${overdue}</div>
-        <div class="analytics-label">Overdue</div>
-      </div>
-      <div class="analytics-stat" style="color:${dueSoon>0?'#d97706':'var(--ink-soft)'};">
-        <div class="analytics-num">${dueSoon}</div>
-        <div class="analytics-label">Due in 3d</div>
-      </div>
-      <div class="analytics-progress-wrap">
-        <div class="analytics-progress-label">${pct}% complete</div>
-        <div class="analytics-progress-track"><div class="analytics-progress-fill" style="width:${pct}%;"></div></div>
+      <div class="analytics-stats-grid">
+        <div class="analytics-stat">
+          <div class="analytics-num">${total}</div>
+          <div class="analytics-label">Total</div>
+        </div>
+        <div class="analytics-stat" style="color:var(--green);">
+          <div class="analytics-num">${completed}</div>
+          <div class="analytics-label">Completed</div>
+        </div>
+        <div class="analytics-stat" style="color:var(--blue-text);">
+          <div class="analytics-num">${open}</div>
+          <div class="analytics-label">Open</div>
+        </div>
+        <div class="analytics-stat" style="color:${overdue>0?'var(--stamp-dark)':'var(--ink-soft)'};">
+          <div class="analytics-num">${overdue}</div>
+          <div class="analytics-label">Overdue</div>
+        </div>
+        <div class="analytics-stat" style="color:${dueSoon>0?'#d97706':'var(--ink-soft)'};">
+          <div class="analytics-num">${dueSoon}</div>
+          <div class="analytics-label">Due in 3d</div>
+        </div>
       </div>
     </div>` : ''}
     <div class="row">

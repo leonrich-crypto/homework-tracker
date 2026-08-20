@@ -88,6 +88,15 @@
   .analytics-num{font-family:'Zilla Slab',serif;font-weight:700;font-size:1.5rem;line-height:1;color:var(--ink);}
   .analytics-stat[style*="color"] .analytics-num{color:inherit;}
   .analytics-label{font-family:'IBM Plex Mono',monospace;font-size:0.62rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-soft);margin-top:3px;}
+  .class-group{margin-bottom:14px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--card);}
+  .class-group summary{list-style:none;cursor:pointer;padding:12px 16px;display:flex;align-items:center;gap:10px;user-select:none;}
+  .class-group summary::-webkit-details-marker{display:none;}
+  .class-group summary::before{content:'▸';font-size:0.75rem;color:var(--ink-soft);transition:transform .15s ease;flex-shrink:0;}
+  .class-group[open] summary::before{transform:rotate(90deg);}
+  .class-group-tab{width:10px;height:10px;border-radius:3px;flex-shrink:0;}
+  .class-group-label{font-family:'Zilla Slab',serif;font-weight:700;font-size:1.02rem;color:var(--ink);flex:1;}
+  .class-group-count{font-family:'IBM Plex Mono',monospace;font-size:0.72rem;color:var(--ink-soft);background:var(--paper);padding:3px 9px;border-radius:12px;}
+  .class-group > .cards-grid, .class-group > .empty{padding:0 16px 16px;}
   .cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px;}
   .tiles-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;}
   .tile{position:relative;border-radius:8px;overflow:hidden;aspect-ratio:4/3;cursor:pointer;background:var(--card-raised);border:1px solid var(--line);}
@@ -221,7 +230,7 @@ function googleBadgeHTML(){
   return `<svg width="9" height="9" viewBox="0 0 10 10" style="display:inline-block;vertical-align:middle;margin-right:3px;flex-shrink:0;"><circle cx="2.6" cy="2.6" r="2.4" fill="#4285F4"/><circle cx="7.4" cy="2.6" r="2.4" fill="#EA4335"/><circle cx="2.6" cy="7.4" r="2.4" fill="#FBBC05"/><circle cx="7.4" cy="7.4" r="2.4" fill="#34A853"/></svg>`;
 }
 
-let state = { assignments: [], courses: [], settings: { calendarName: 'University of Michigan Schedule', calendarId: '', calendars: [], showSyncedDuplicates: false }, tab: 'cards', calendarOptions: null, googleEvents: {}, googleEventsYearLoaded: false, googleYearLoading: false };
+let state = { assignments: [], courses: [], settings: { calendarName: 'University of Michigan Schedule', calendarId: '', calendars: [], showSyncedDuplicates: false }, tab: 'cards', calendarOptions: null, googleEvents: {}, googleEventsYearLoaded: false, googleYearLoading: false, classGroupOpen: {} };
 
 function getSyncTargets(){
   // returns [{id,name}, ...] — falls back to the legacy single-calendar field for anyone who set it up before multi-calendar support
@@ -359,6 +368,12 @@ function render(){
   }
 }
 
+function assignmentMatchesCourse(a, c){
+  if(!a.course) return false;
+  const ac = a.course.toLowerCase().trim();
+  return (c.name && ac===c.name.toLowerCase().trim()) || (c.courseNumber && ac===c.courseNumber.toLowerCase().trim());
+}
+
 function renderCards(){
   const sorted = [...state.assignments].sort((a,b)=> (a.done - b.done) || (a.date||'').localeCompare(b.date||''));
   const total = state.assignments.length;
@@ -419,35 +434,59 @@ function renderCards(){
       <strong style="font-family:'Zilla Slab',serif;font-size:1.15rem;">Assignment Cards</strong>
       <button class="btn stamp-btn" id="addBtn">+ New Entry</button>
     </div>
-    ${sorted.length===0 ? `<div class="empty">No assignments logged yet. Add one manually or scan a syllabus.</div>` : `
-    <div class="cards-grid">
-      ${sorted.map(a=>{
-        const cc = courseColor(a.course);
-        const tc = TYPE_COLORS[a.type]||'#5a5a3a';
-        const du = a.date ? daysUntil(a.date) : null;
-        const dueLabel = du===null?'':(du<0?`${Math.abs(du)}d overdue`:du===0?'due today':`in ${du}d`);
-        // urgency color: red = overdue, orange = due within 2 days, yellow = within a week, green = further out or already done
-        const dueColor = a.done ? 'var(--green)'
-          : du===null ? 'var(--ink-soft)'
-          : du<0 ? 'var(--stamp)'
-          : du<=2 ? '#d97706'
-          : du<=7 ? '#c9a227'
-          : 'var(--green)';
-        return `<div class="card">
-          <div class="card-tab" style="background:${cc}">${a.course||'General'}</div>
-          <h3>${a.title}</h3>
-          <div class="meta"><span class="type-badge" style="background:${tc}">${a.type}</span>${fmtDate(a.date)}${a.time?' · '+fmtTime(a.time)+(a.endTime?'–'+fmtTime(a.endTime):''):''}${a.location?' · '+a.location:''}${dueLabel?` · <span style="color:${dueColor};font-weight:600;">${dueLabel}</span>`:''}</div>
-          ${a.notes?`<div class="meta" style="margin-top:-4px;">${a.notes}</div>`:''}
-          <div class="card-actions">
-            <button class="btn small ${a.done?'secondary':''}" data-act="toggle" data-id="${a.id}">${a.done?'Mark open':'Mark done'}</button>
-            <button class="btn small ${a.synced && !a.syncError?'secondary':''}" data-act="sync" data-id="${a.id}" ${a.syncError?'style="color:var(--stamp-dark);border-color:var(--stamp-dark);"':(a.synced?'style="opacity:1;cursor:default;pointer-events:none;"':'')}>${a.syncError?'Retry Sync':a.synced?'Synced ✓':'Send to Calendar'}</button>
-            <button class="btn small secondary" data-act="del" data-id="${a.id}">Delete</button>
-          </div>
-          ${a.done?`<div class="done-badge">✓ Submitted</div>`:''}
-        </div>`;
-      }).join('')}
-    </div>`}
+    ${sorted.length===0 ? `<div class="empty">No assignments logged yet. Add one manually or scan a syllabus.</div>` : renderGroupedCards(sorted)}
   </div>`;
+}
+
+function renderAssignmentCard(a){
+  const cc = courseColor(a.course);
+  const tc = TYPE_COLORS[a.type]||'#5a5a3a';
+  const du = a.date ? daysUntil(a.date) : null;
+  const dueLabel = du===null?'':(du<0?`${Math.abs(du)}d overdue`:du===0?'due today':`in ${du}d`);
+  const dueColor = a.done ? 'var(--green)'
+    : du===null ? 'var(--ink-soft)'
+    : du<0 ? 'var(--stamp)'
+    : du<=2 ? '#d97706'
+    : du<=7 ? '#c9a227'
+    : 'var(--green)';
+  return `<div class="card">
+    <div class="card-tab" style="background:${cc}">${a.course||'General'}</div>
+    <h3>${a.title}</h3>
+    <div class="meta"><span class="type-badge" style="background:${tc}">${a.type}</span>${fmtDate(a.date)}${a.time?' · '+fmtTime(a.time)+(a.endTime?'–'+fmtTime(a.endTime):''):''}${a.location?' · '+a.location:''}${dueLabel?` · <span style="color:${dueColor};font-weight:600;">${dueLabel}</span>`:''}</div>
+    ${a.notes?`<div class="meta" style="margin-top:-4px;">${a.notes}</div>`:''}
+    <div class="card-actions">
+      <button class="btn small ${a.done?'secondary':''}" data-act="toggle" data-id="${a.id}">${a.done?'Mark open':'Mark done'}</button>
+      <button class="btn small ${a.synced && !a.syncError?'secondary':''}" data-act="sync" data-id="${a.id}" ${a.syncError?'style="color:var(--stamp-dark);border-color:var(--stamp-dark);"':(a.synced?'style="opacity:1;cursor:default;pointer-events:none;"':'')}>${a.syncError?'Retry Sync':a.synced?'Synced ✓':'Send to Calendar'}</button>
+      <button class="btn small secondary" data-act="del" data-id="${a.id}">Delete</button>
+    </div>
+    ${a.done?`<div class="done-badge">✓ Submitted</div>`:''}
+  </div>`;
+}
+
+function renderGroupedCards(sorted){
+  const groups = state.courses.map(c=>({
+    key: c.id, label: `${c.icon||'📘'} ${c.name}`, color: c.color,
+    items: sorted.filter(a=>assignmentMatchesCourse(a,c))
+  }));
+  const claimed = new Set();
+  groups.forEach(g=>g.items.forEach(a=>claimed.add(a.id)));
+  const unmatched = sorted.filter(a=>!claimed.has(a.id));
+  if(unmatched.length>0) groups.push({key:'__other', label:'📎 Other / Unmatched', color:'#6b7480', items:unmatched});
+
+  return groups.filter(g=>g.items.length>0 || state.courses.some(c=>c.id===g.key)).map(g=>{
+    const doneCount = g.items.filter(a=>a.done).length;
+    const isOpen = state.classGroupOpen[g.key] !== false; // default open
+    return `<details class="class-group" data-group-key="${g.key}" ${isOpen?'open':''}>
+      <summary>
+        <span class="class-group-tab" style="background:${g.color||'#6b7480'};"></span>
+        <span class="class-group-label">${g.label}</span>
+        <span class="class-group-count">${doneCount}/${g.items.length}</span>
+      </summary>
+      ${g.items.length===0
+        ? `<div class="empty" style="margin-top:10px;">No assignments logged for this class yet.</div>`
+        : `<div class="cards-grid" style="margin-top:12px;">${g.items.map(renderAssignmentCard).join('')}</div>`}
+    </details>`;
+  }).join('');
 }
 
 function renderClasses(){
@@ -672,6 +711,12 @@ function renderSettings(){
 function attachHandlers(){
   const addBtn = document.getElementById('addBtn');
   if(addBtn) addBtn.onclick = openAddModal;
+
+  document.querySelectorAll('.class-group').forEach(det=>{
+    det.addEventListener('toggle', ()=>{
+      state.classGroupOpen[det.dataset.groupKey] = det.open;
+    });
+  });
 
   const addClassBtn = document.getElementById('addClassBtn');
   if(addClassBtn) addClassBtn.onclick = openClassModal;

@@ -745,8 +745,8 @@ function buildDayItems(y,m,d){
   const monthKey = `${y}-${m}`;
   const gEvents = state.googleEvents[monthKey] || [];
   const cf = ensureCardFilters();
-  let assignToday = state.assignments.filter(a=>a.date===iso);
-  let classesToday = state.courses.filter(c=>(c.days||[]).includes(weekday));
+  let assignToday = state.assignments.filter(a=>a.date===iso && a.synced);
+  let classesToday = state.courses.filter(c=>(c.days||[]).includes(weekday) && c.synced);
   assignToday = assignToday.filter(a=> cf.types.has(a.type||'other') && cf.classes.has(classKeyFor(a)));
   classesToday = classesToday.filter(c=> cf.classes.has(c.id));
   const knownIds = state.settings.showSyncedDuplicates ? null : getKnownSyncedEventIds();
@@ -1650,28 +1650,33 @@ async function deleteEventOnAllTargets(idsMap){
 // Removes a class's own recurring lecture event AND every assignment belonging to that
 // class that's synced to the calendar too — a full "unsync this whole course" action.
 async function unsyncClassAndItsAssignments(c){
-  if(c.googleEventIds && Object.keys(c.googleEventIds).length>0){
-    const result = await deleteEventOnAllTargets(c.googleEventIds);
-    if(result.successCount >= result.total){
-      c.synced = false; c.syncError = false; c.googleEventIds = {};
-    } else {
-      c.syncError = true; // some deletions failed — keep the ids so a retry can find them
+  try{
+    if(c.googleEventIds && Object.keys(c.googleEventIds).length>0){
+      const result = await deleteEventOnAllTargets(c.googleEventIds);
+      if(result.successCount >= result.total){
+        c.synced = false; c.syncError = false; c.googleEventIds = {};
+      } else {
+        c.syncError = true; // some deletions failed — keep the ids so a retry can find them
+      }
+      await saveCourses();
     }
+
+    const matched = state.assignments.filter(a=>assignmentMatchesCourse(a,c) && a.googleEventIds && Object.keys(a.googleEventIds).length>0);
+    let anyChanged = false;
+    for(const a of matched){
+      const result = await deleteEventOnAllTargets(a.googleEventIds);
+      if(result.successCount >= result.total){
+        a.synced = false; a.syncError = false; a.googleEventIds = {};
+      } else {
+        a.syncError = true;
+      }
+      anyChanged = true;
+    }
+    if(anyChanged) await saveAssignments();
+  }catch(e){
+    c.syncError = true;
     await saveCourses();
   }
-
-  const matched = state.assignments.filter(a=>assignmentMatchesCourse(a,c) && a.googleEventIds && Object.keys(a.googleEventIds).length>0);
-  let anyChanged = false;
-  for(const a of matched){
-    const result = await deleteEventOnAllTargets(a.googleEventIds);
-    if(result.successCount >= result.total){
-      a.synced = false; a.syncError = false; a.googleEventIds = {};
-    } else {
-      a.syncError = true;
-    }
-    anyChanged = true;
-  }
-  if(anyChanged) await saveAssignments();
 }
 
 
@@ -1917,30 +1922,36 @@ async function syncClassToCalendar(c){
 async function syncToCalendar(a, quiet){
   const card = quiet ? null : [...document.querySelectorAll('[data-id="'+a.id+'"][data-act="sync"]')][0];
   if(card){ card.textContent = 'Syncing...'; card.disabled = true; }
-  const targets = getSyncTargets();
-  const ids = {};
-  let successCount = 0;
-  const REMINDER_MINUTES = [10080, 4320, 2880, 1440]; // 1wk, 3d, 48h, 24h before
+  try{
+    const targets = getSyncTargets();
+    const ids = {};
+    let successCount = 0;
+    const REMINDER_MINUTES = [10080, 4320, 2880, 1440]; // 1wk, 3d, 48h, 24h before
 
-  for(const target of targets){
-    const r = await createEventOnTarget(target, {
-      title: `${a.title}${a.course ? ' — '+a.course : ''}`,
-      date: a.date || new Date().toISOString().slice(0,10),
-      time: a.time || '', endTime: a.time ? (a.endTime || a.time) : '',
-      allDay: !a.time,
-      location: a.location || '',
-      notes: `${a.notes||''} (Type: ${a.type})`,
-      reminders: REMINDER_MINUTES
-    });
-    if(r.ok){ ids[target.id||target.name] = r.id; successCount++; }
-  }
-  if(successCount>0){
-    a.synced = true;
-    a.syncError = successCount < targets.length;
-    a.googleEventIds = ids;
-    if(!quiet) await saveAssignments();
-  } else {
+    for(const target of targets){
+      const r = await createEventOnTarget(target, {
+        title: `${a.title}${a.course ? ' — '+a.course : ''}`,
+        date: a.date || new Date().toISOString().slice(0,10),
+        time: a.time || '', endTime: a.time ? (a.endTime || a.time) : '',
+        allDay: !a.time,
+        location: a.location || '',
+        notes: `${a.notes||''} (Type: ${a.type})`,
+        reminders: REMINDER_MINUTES
+      });
+      if(r.ok){ ids[target.id||target.name] = r.id; successCount++; }
+    }
+    if(successCount>0){
+      a.synced = true;
+      a.syncError = successCount < targets.length;
+      a.googleEventIds = ids;
+      if(!quiet) await saveAssignments();
+    } else {
+      a.syncError = true;
+      if(!quiet) await saveAssignments();
+    }
+  }catch(e){
     a.syncError = true;
+    if(!quiet) await saveAssignments();
   }
   if(!quiet) render();
 }

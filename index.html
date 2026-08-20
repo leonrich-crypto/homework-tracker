@@ -761,7 +761,8 @@ function buildDayItems(y,m,d){
   assignToday = assignToday.filter(a=> cf.types.has(a.type||'other') && cf.classes.has(classKeyFor(a)));
   classesToday = classesToday.filter(c=> cf.classes.has(c.id));
   const knownIds = state.settings.showSyncedDuplicates ? null : getKnownSyncedEventIds();
-  const googleToday = gEvents.filter(e=> e.date===iso && (state.settings.showSyncedDuplicates || !knownIds.has(e.id)));
+  const isKnown = (e)=> knownIds.has(e.id) || [...knownIds].some(id => e.id.startsWith(id+'_')); // recurring instances are "{seriesId}_{timestamp}"
+  const googleToday = gEvents.filter(e=> e.date===iso && (state.settings.showSyncedDuplicates || !isKnown(e)));
   let items = [
     ...classesToday.map(c=>({time:c.startTime||'', timeLabel: c.startTime?`${fmtTime(c.startTime)}${c.endTime?'–'+fmtTime(c.endTime):''}`:'', title:`${c.icon||'📘'} ${c.name}`, sub:`Class${c.location?' · '+c.location:''}`, bg:c.color, kind:'class', ref:c})),
     ...assignToday.map(a=>({time:a.time||'', timeLabel: a.time?`${fmtTime(a.time)}${a.endTime?'–'+fmtTime(a.endTime):''}`:'', title:a.title, sub:`${a.type}${a.course?' · '+a.course:''}${a.location?' · '+a.location:''}`, bg:courseColor(a.course), kind:'assignment', ref:a})),

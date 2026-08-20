@@ -1682,10 +1682,9 @@ async function createEventOnAllTargets(fields){
 async function updateEventOnAllTargets(idsMap, fields){
   if(!idsMap) return { successCount:0, total:0 };
   const entries = Object.entries(idsMap);
-  const targets = getSyncTargets();
   let successCount = 0;
   for(const [key, eventId] of entries){
-    const target = targets.find(t=>(t.id||t.name)===key) || {id:key, name:key};
+    const target = { id: key, name: key };
     const ok = await updateEventOnTarget(target, eventId, fields);
     if(ok) successCount++;
   }
@@ -1695,10 +1694,12 @@ async function updateEventOnAllTargets(idsMap, fields){
 async function deleteEventOnAllTargets(idsMap){
   if(!idsMap) return { successCount:0, total:0 };
   const entries = Object.entries(idsMap);
-  const targets = getSyncTargets();
   let successCount = 0;
   for(const [key, eventId] of entries){
-    const target = targets.find(t=>(t.id||t.name)===key) || {id:key, name:key};
+    // the stored key is always the real calendar id it was created on — use it directly rather than
+    // re-resolving through whichever target list happens to be active, which can silently mismatch
+    // between class calendars and the dedicated assignment calendar
+    const target = { id: key, name: key };
     const ok = await deleteEventOnTarget(target, eventId);
     if(ok) successCount++;
   }
@@ -1979,15 +1980,17 @@ async function reconcileClassSync(c){
     }
     if(anyChanged) await saveAssignments();
 
-    // overall class "synced" reflects whether everything currently selected is actually present
-    const classPartOk = !byday || !sel.classTime || (c.googleEventIds && Object.keys(c.googleEventIds).length>0);
+    // overall class "synced" reflects whether everything actually matches what's selected —
+    // both "selected items are present" AND "deselected items are actually gone"
+    const classPartOk = !byday || (sel.classTime === (c.googleEventIds && Object.keys(c.googleEventIds).length>0));
     const assignmentsPartOk = matched.every(a=>{
       const isTest = a.type==='test';
       const wants = isTest ? sel.tests : sel.assignments;
       const has = a.googleEventIds && Object.keys(a.googleEventIds).length>0;
-      return wants ? has : true;
+      return wants === has; // fully reconciled: has an event iff it's wanted
     });
     c.synced = classPartOk && assignmentsPartOk;
+    c.syncError = !c.synced;
     await saveCourses();
   }catch(e){
     c.syncError = true;

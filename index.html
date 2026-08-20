@@ -153,6 +153,7 @@
   .filter-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px;}
   .filter-row:last-child{margin-bottom:0;}
   .filter-row-label{font-family:'IBM Plex Mono',monospace;font-size:0.64rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-soft);margin-right:4px;min-width:52px;}
+  .sync-cat-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;margin-left:22px;}
   .filter-chip{font-family:'IBM Plex Mono',monospace;font-size:0.68rem;text-transform:capitalize;padding:4px 11px;border-radius:14px;border:1.5px solid var(--line-light);background:transparent;color:var(--ink-soft);cursor:pointer;transition:opacity .15s ease;}
   .filter-chip.on{color:#fff;opacity:1;}
   .filter-chip:not(.on){opacity:0.55;}
@@ -607,6 +608,26 @@ function classKeyFor(a){
   return match ? match.id : '__other';
 }
 
+function ensureClassSyncSelection(courseId){
+  if(!state.classSyncSelection) state.classSyncSelection = {};
+  if(!state.classSyncSelection[courseId]){
+    state.classSyncSelection[courseId] = { classTime:true, assignments:true, tests:true };
+  }
+  return state.classSyncSelection[courseId];
+}
+
+function renderSyncCategoryChips(courseId){
+  const sel = ensureClassSyncSelection(courseId);
+  const items = [
+    ['classTime', '📅 Class Time'],
+    ['assignments', '📘 Assignments'],
+    ['tests', '📝 Tests'],
+  ];
+  return `<div class="sync-cat-row" onclick="event.stopPropagation()">
+    ${items.map(([key,label])=>`<button class="filter-chip ${sel[key]?'on':''}" data-sync-cat="${key}" data-sync-cat-course="${courseId}" style="${sel[key]?`background:var(--mustard);border-color:var(--mustard);`:''}">${label}</button>`).join('')}
+  </div>`;
+}
+
 function ensureCardFilters(){
   if(!state.cardFilters){
     state.cardFilters = {
@@ -719,6 +740,7 @@ function renderClasses(){
           ${c.location?`<div class="meta" style="margin-bottom:2px;">${c.location}</div>`:''}
           ${c.canvasLink?`<div class="meta" style="margin-bottom:2px;"><a href="${c.canvasLink}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--blue-text);">🔗 Canvas</a></div>`:''}
           <div class="meta" style="color:var(--blue-text);margin-bottom:8px;">→ ${assignCount} assignment${assignCount===1?'':'s'}</div>
+          ${renderSyncCategoryChips(c.id)}
           <div class="card-actions">
             ${c.syncError
               ? `<span class="sync-badge sync-badge-error">⚠ Failed</span>`
@@ -934,7 +956,16 @@ function attachHandlers(){
   });
 
   document.querySelectorAll('.filter-chip').forEach(chip=>{
-    chip.onclick = ()=>{
+    chip.onclick = (ev)=>{
+      if(chip.dataset.syncCat){
+        ev.stopPropagation();
+        const courseId = chip.dataset.syncCatCourse;
+        const key = chip.dataset.syncCat;
+        const sel = ensureClassSyncSelection(courseId);
+        sel[key] = !sel[key];
+        render();
+        return;
+      }
       const kind = chip.dataset.filterKind; // 'class' or 'type'
       const val = chip.dataset.filterVal;
       const set = kind==='class' ? state.cardFilters.classes : state.cardFilters.types;
@@ -975,14 +1006,14 @@ function attachHandlers(){
       const id = btn.dataset.cid; const act = btn.dataset.cact;
       const c = state.courses.find(x=>x.id===id);
       if(act==='delClass'){
-        await unsyncClassAndItsAssignments(c);
+        await unsyncClassAndItsAssignments(c, false);
         state.courses = state.courses.filter(x=>x.id!==id);
         await saveCourses(); render();
       }
       else if(act==='syncClass'){ await syncClassToCalendar(c); }
       else if(act==='unsyncClass'){
         btn.textContent = 'Removing...'; btn.disabled = true;
-        await unsyncClassAndItsAssignments(c);
+        await unsyncClassAndItsAssignments(c, true);
         render();
       }
     };
@@ -1233,12 +1264,12 @@ function openClassDetailModal(c){
   if(unsyncBtn){
     unsyncBtn.onclick = async ()=>{
       unsyncBtn.textContent = 'Removing...'; unsyncBtn.disabled = true;
-      await unsyncClassAndItsAssignments(c);
+      await unsyncClassAndItsAssignments(c, true);
       bg.remove(); render();
     };
   }
   bg.querySelector('#d_delete').onclick = async ()=>{
-    await unsyncClassAndItsAssignments(c);
+    await unsyncClassAndItsAssignments(c, false);
     state.courses = state.courses.filter(x=>x.id!==c.id);
     await saveCourses();
     bg.remove(); render();
@@ -1664,9 +1695,10 @@ async function deleteEventOnAllTargets(idsMap){
 
 // Removes a class's own recurring lecture event AND every assignment belonging to that
 // class that's synced to the calendar too — a full "unsync this whole course" action.
-async function unsyncClassAndItsAssignments(c){
+async function unsyncClassAndItsAssignments(c, respectSelection){
+  const sel = respectSelection===false ? {classTime:true, assignments:true, tests:true} : ensureClassSyncSelection(c.id);
   try{
-    if(c.googleEventIds && Object.keys(c.googleEventIds).length>0){
+    if(sel.classTime && c.googleEventIds && Object.keys(c.googleEventIds).length>0){
       const result = await deleteEventOnAllTargets(c.googleEventIds);
       if(result.successCount >= result.total){
         c.synced = false; c.syncError = false; c.googleEventIds = {};
@@ -1676,7 +1708,11 @@ async function unsyncClassAndItsAssignments(c){
       await saveCourses();
     }
 
-    const matched = state.assignments.filter(a=>assignmentMatchesCourse(a,c) && a.googleEventIds && Object.keys(a.googleEventIds).length>0);
+    const matched = state.assignments.filter(a=>{
+      if(!assignmentMatchesCourse(a,c) || !a.googleEventIds || Object.keys(a.googleEventIds).length===0) return false;
+      const isTest = a.type==='test';
+      return isTest ? sel.tests : sel.assignments;
+    });
     let anyChanged = false;
     for(const a of matched){
       const result = await deleteEventOnAllTargets(a.googleEventIds);
@@ -1870,16 +1906,16 @@ function openItemEditModal(item){
 
 
 async function syncClassToCalendar(c){
-  if(c.synced && !c.syncError) return; // dedupe guard: don't re-sync a class that's already fully synced
   const btn = [...document.querySelectorAll('[data-cid="'+c.id+'"][data-cact="syncClass"]')][0];
   if(btn){ btn.textContent = 'Syncing...'; btn.disabled = true; }
+  const sel = ensureClassSyncSelection(c.id);
+  const hasClassEvent = c.googleEventIds && Object.keys(c.googleEventIds).length>0;
   try{
     const daysMap = {Sun:'SU',Mon:'MO',Tue:'TU',Wed:'WE',Thu:'TH',Fri:'FR',Sat:'SA'};
     const byday = (c.days||[]).map(d=>daysMap[d]).filter(Boolean).join(',');
     const targets = getSyncTargets();
     const ids = {};
     let successCount = 0;
-    // find the next upcoming occurrence of this class's weekday to anchor the recurring event's start date
     const today = new Date();
     const dayNums = {Sun:0,Mon:1,Tue:2,Wed:3,Thu:4,Fri:5,Sat:6};
     const targetDays = (c.days||[]).map(d=>dayNums[d]).filter(n=>n!==undefined);
@@ -1894,8 +1930,8 @@ async function syncClassToCalendar(c){
     const untilPart = c.termEnds ? `;UNTIL=${c.termEnds.replace(/-/g,'')}T235959Z` : '';
     const recurrence = byday ? `RRULE:FREQ=WEEKLY;BYDAY=${byday}${untilPart}` : undefined;
 
-    // only attempt the class's own lecture-time event if it actually has meeting days set
-    if(byday){
+    // only attempt the class's own lecture-time event if it has meeting days, "Class Time" is selected, and it isn't already synced
+    if(byday && sel.classTime && !hasClassEvent){
       for(const target of targets){
         const r = await createEventOnTarget(target, {
           title: `${c.name} (Class)`, date: anchorDate, time: c.startTime || '09:00', endTime: c.endTime || '10:00',
@@ -1903,10 +1939,6 @@ async function syncClassToCalendar(c){
         });
         if(r.ok){ ids[target.id||target.name] = r.id; successCount++; }
       }
-    }
-
-    const classEventOk = byday ? successCount>0 : true; // no meeting days set = nothing to sync for the class itself, that's fine
-    if(byday){
       if(successCount>0){
         c.synced = true;
         c.syncError = successCount < targets.length;
@@ -1917,14 +1949,21 @@ async function syncClassToCalendar(c){
       await saveCourses();
     }
 
-    // sync every matching assignment too, so "synced" is a comprehensive state for the whole class
-    const matched = state.assignments.filter(a=>assignmentMatchesCourse(a,c) && !a.synced);
+    // sync matching assignments, respecting the "Assignments" and "Tests" category toggles
+    const matched = state.assignments.filter(a=>{
+      if(!assignmentMatchesCourse(a,c) || a.synced) return false;
+      const isTest = a.type==='test';
+      return isTest ? sel.tests : sel.assignments;
+    });
     if(matched.length>0){
       for(const a of matched){
         await syncToCalendar(a, true); // quiet=true: skip individual button DOM lookups, we're batching
       }
       await saveAssignments();
-      if(!byday){ c.synced = true; c.syncError = false; await saveCourses(); } // no class meeting time, but assignments synced fine
+      if(!(byday && sel.classTime)){ c.synced = true; c.syncError = false; await saveCourses(); } // no class event synced, but selected assignments are
+    } else if(!(byday && sel.classTime)){
+      // nothing was actually selected/available to sync
+      if(!c.synced){ c.syncError = true; await saveCourses(); }
     }
   }catch(e){
     c.syncError = true;

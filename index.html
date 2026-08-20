@@ -388,7 +388,7 @@ function render(){
   }
 
   const tabs = document.getElementById('tabs');
-  tabs.innerHTML = ['cards:Cards','classes:Classes','calendar:Calendar','scan:Scan Syllabus','settings:Settings'].map(t=>{
+  tabs.innerHTML = ['cards:Dashboard','classes:Classes','calendar:Calendar','scan:Scan Syllabus','settings:Settings'].map(t=>{
     const [id,label] = t.split(':');
     return `<button class="tab-btn ${state.tab===id?'active':''}" data-tab="${id}">${label}</button>`;
   }).join('');

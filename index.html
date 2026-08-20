@@ -107,7 +107,7 @@
   .card .meta{font-family:'IBM Plex Mono',monospace;font-size:0.72rem;color:var(--ink-soft);margin-left:22px;margin-bottom:10px;}
   .type-badge{display:inline-block;font-size:0.62rem;text-transform:uppercase;letter-spacing:0.05em;padding:2px 7px;border-radius:3px;font-family:'IBM Plex Mono',monospace;margin-right:6px;color:#fff;}
   .card-actions{display:flex;gap:6px;margin-left:22px;flex-wrap:wrap;margin-top:8px;}
-  .stamp-mark{position:absolute;bottom:8px;right:10px;font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:0.68rem;color:var(--stamp-dark);border:2px solid var(--stamp-dark);border-radius:4px;padding:2px 6px;transform:rotate(-9deg);opacity:0.9;letter-spacing:0.04em;}
+  .done-badge{position:absolute;bottom:10px;right:10px;font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:0.68rem;color:#eafbea;background:var(--green);border-radius:5px;padding:3px 9px;letter-spacing:0.03em;}
 
   .empty{font-family:'IBM Plex Mono',monospace;font-size:0.85rem;color:var(--ink-soft);text-align:center;padding:30px 10px;border:1.5px dashed var(--line-light);border-radius:6px;}
 
@@ -425,17 +425,24 @@ function renderCards(){
         const tc = TYPE_COLORS[a.type]||'#5a5a3a';
         const du = a.date ? daysUntil(a.date) : null;
         const dueLabel = du===null?'':(du<0?`${Math.abs(du)}d overdue`:du===0?'due today':`in ${du}d`);
+        // urgency color: red = overdue, orange = due within 2 days, yellow = within a week, green = further out or already done
+        const dueColor = a.done ? 'var(--green)'
+          : du===null ? 'var(--ink-soft)'
+          : du<0 ? 'var(--stamp)'
+          : du<=2 ? '#d97706'
+          : du<=7 ? '#c9a227'
+          : 'var(--green)';
         return `<div class="card">
           <div class="card-tab" style="background:${cc}">${a.course||'General'}</div>
           <h3>${a.title}</h3>
-          <div class="meta"><span class="type-badge" style="background:${tc}">${a.type}</span>${fmtDate(a.date)}${a.time?' · '+fmtTime(a.time)+(a.endTime?'–'+fmtTime(a.endTime):''):''}${a.location?' · '+a.location:''} ${dueLabel?`· ${dueLabel}`:''}</div>
+          <div class="meta"><span class="type-badge" style="background:${tc}">${a.type}</span>${fmtDate(a.date)}${a.time?' · '+fmtTime(a.time)+(a.endTime?'–'+fmtTime(a.endTime):''):''}${a.location?' · '+a.location:''}${dueLabel?` · <span style="color:${dueColor};font-weight:600;">${dueLabel}</span>`:''}</div>
           ${a.notes?`<div class="meta" style="margin-top:-4px;">${a.notes}</div>`:''}
           <div class="card-actions">
             <button class="btn small ${a.done?'secondary':''}" data-act="toggle" data-id="${a.id}">${a.done?'Mark open':'Mark done'}</button>
             <button class="btn small ${a.synced && !a.syncError?'secondary':''}" data-act="sync" data-id="${a.id}" ${a.syncError?'style="color:var(--stamp-dark);border-color:var(--stamp-dark);"':(a.synced?'style="opacity:1;cursor:default;pointer-events:none;"':'')}>${a.syncError?'Retry Sync':a.synced?'Synced ✓':'Send to Calendar'}</button>
             <button class="btn small secondary" data-act="del" data-id="${a.id}">Delete</button>
           </div>
-          ${a.done?`<div class="stamp-mark">SUBMITTED</div>`:''}
+          ${a.done?`<div class="done-badge">✓ Submitted</div>`:''}
         </div>`;
       }).join('')}
     </div>`}

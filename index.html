@@ -150,6 +150,14 @@
   .class-card-tall .card-actions{margin-top:4px;}
   .card-delete-btn{padding:6px 10px;opacity:0.75;}
   .card-delete-btn:hover{opacity:1;color:var(--stamp-dark);border-color:var(--stamp-dark);}
+  .filter-bar{margin-bottom:16px;padding:12px 14px;background:var(--card-raised);border:1px solid var(--line);border-radius:8px;}
+  .filter-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px;}
+  .filter-row:last-child{margin-bottom:0;}
+  .filter-row-label{font-family:'IBM Plex Mono',monospace;font-size:0.64rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-soft);margin-right:4px;min-width:52px;}
+  .filter-chip{font-family:'IBM Plex Mono',monospace;font-size:0.68rem;text-transform:capitalize;padding:4px 11px;border-radius:14px;border:1.5px solid var(--line-light);background:transparent;color:var(--ink-soft);cursor:pointer;transition:opacity .15s ease;}
+  .filter-chip.on{color:#fff;opacity:1;}
+  .filter-chip:not(.on){opacity:0.55;}
+  .filter-chip:hover{opacity:1;}
 
   .empty{font-family:'IBM Plex Mono',monospace;font-size:0.85rem;color:var(--ink-soft);text-align:center;padding:30px 10px;border:1.5px dashed var(--line-light);border-radius:6px;}
 
@@ -568,7 +576,54 @@ function renderCards(){
       <strong style="font-family:'Space Grotesk',sans-serif;font-size:1.15rem;">Assignment Cards</strong>
       <button class="btn stamp-btn" id="addBtn">+ New Entry</button>
     </div>
-    ${sorted.length===0 ? `<div class="empty">No assignments logged yet. Add one manually or scan a syllabus.</div>` : renderGroupedCards(sorted)}
+    ${total>0 ? renderFilterBar() : ''}
+    ${sorted.length===0 ? `<div class="empty">No assignments logged yet. Add one manually or scan a syllabus.</div>` : renderGroupedCards(applyCardFilters(sorted))}
+  </div>`;
+}
+
+function applyCardFilters(list){
+  const cf = state.cardFilters;
+  if(!cf) return list;
+  return list.filter(a=>{
+    if(cf.types && !cf.types.has(a.type||'other')) return false;
+    if(cf.classes){
+      const key = classKeyFor(a);
+      if(!cf.classes.has(key)) return false;
+    }
+    return true;
+  });
+}
+
+function classKeyFor(a){
+  const match = state.courses.find(c=>assignmentMatchesCourse(a,c));
+  return match ? match.id : '__other';
+}
+
+function renderFilterBar(){
+  if(!state.cardFilters){
+    state.cardFilters = {
+      classes: new Set([...state.courses.map(c=>c.id), '__other']),
+      types: new Set(['homework','quiz','test','project','reading','other'])
+    };
+  }
+  const cf = state.cardFilters;
+  const classChips = [...state.courses, {id:'__other', name:'Other', icon:'📎', color:'#6b7480'}]
+    .filter(c => state.assignments.some(a=>classKeyFor(a)===c.id))
+    .map(c=>{
+      const on = cf.classes.has(c.id);
+      return `<button class="filter-chip ${on?'on':''}" data-filter-kind="class" data-filter-val="${c.id}" style="${on?`background:${c.color};border-color:${c.color};`:''}">${c.icon||'📘'} ${c.courseNumber||c.name}</button>`;
+    }).join('');
+  const typeChips = ['homework','quiz','test','project','reading','other']
+    .filter(t => state.assignments.some(a=>(a.type||'other')===t))
+    .map(t=>{
+      const on = cf.types.has(t);
+      const col = TYPE_COLORS[t]||'#5a5a3a';
+      return `<button class="filter-chip ${on?'on':''}" data-filter-kind="type" data-filter-val="${t}" style="${on?`background:${col};border-color:${col};`:''}">${t}</button>`;
+    }).join('');
+  return `
+  <div class="filter-bar">
+    <div class="filter-row"><span class="filter-row-label">Classes</span>${classChips}</div>
+    <div class="filter-row"><span class="filter-row-label">Type</span>${typeChips}</div>
   </div>`;
 }
 
@@ -870,6 +925,16 @@ function attachHandlers(){
     det.addEventListener('toggle', ()=>{
       state.classGroupOpen[det.dataset.groupKey] = det.open;
     });
+  });
+
+  document.querySelectorAll('.filter-chip').forEach(chip=>{
+    chip.onclick = ()=>{
+      const kind = chip.dataset.filterKind; // 'class' or 'type'
+      const val = chip.dataset.filterVal;
+      const set = kind==='class' ? state.cardFilters.classes : state.cardFilters.types;
+      if(set.has(val)) set.delete(val); else set.add(val);
+      render();
+    };
   });
 
   const addClassBtn = document.getElementById('addClassBtn');

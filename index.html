@@ -280,6 +280,14 @@ function getSyncTargets(){
   if(state.settings.calendarId) return [{id: state.settings.calendarId, name: state.settings.calendarName}];
   return [{id:'', name: state.settings.calendarName || 'primary calendar'}]; // name-based fallback, no id yet
 }
+
+function getAssignmentSyncTargets(){
+  // assignments go to their own dedicated calendar if one's configured, so they don't clutter the class-schedule calendar
+  if(state.settings.assignmentCalendarId){
+    return [{id: state.settings.assignmentCalendarId, name: state.settings.assignmentCalendarName || 'Assignments'}];
+  }
+  return getSyncTargets(); // fall back to the shared class targets if no dedicated assignment calendar is set
+}
 const REMINDER_HOURS = [168, 72, 48, 24]; // 1 week, 3 days, 48h, 24h before
 
 function assignmentToRow(a){
@@ -323,7 +331,8 @@ async function loadState(){
     if(data){
       const calendars = data.calendars || [];
       state.settings = { calendarName: data.calendar_name || (calendars[0]?.name || 'University of Michigan Schedule'),
-        calendarId: calendars[0]?.id || '', calendars, bestStreak: data.best_streak || 0 };
+        calendarId: calendars[0]?.id || '', calendars, bestStreak: data.best_streak || 0,
+        assignmentCalendarId: data.assignment_calendar_id || '', assignmentCalendarName: data.assignment_calendar_name || '' };
     }
   }catch(e){ console.error('load settings failed', e); }
   render();
@@ -1319,7 +1328,7 @@ function openClassModal(){
     const name = bg.querySelector('#c_name').value.trim();
     if(!name){ bg.querySelector('#c_name').style.borderColor='var(--stamp)'; return; }
     const days = [...bg.querySelectorAll('.c_day:checked')].map(el=>el.value);
-    state.courses.push({
+    const newCourse = {
       id: 'c'+Date.now()+Math.random().toString(36).slice(2,6),
       name, days, startTime: bg.querySelector('#c_start').value, endTime: bg.querySelector('#c_end').value,
       location: bg.querySelector('#c_loc').value.trim(), termEnds: bg.querySelector('#c_end_date').value,
@@ -1332,10 +1341,12 @@ function openClassModal(){
       canvasLink: bg.querySelector('#c_canvas').value.trim(),
       quarter: bg.querySelector('#c_quarter').value.trim(),
       color: pickedColor, synced:false
-    });
+    };
+    state.courses.push(newCourse);
     await saveCourses();
     bg.remove();
     render();
+    syncClassToCalendar(newCourse); // new classes sync by default — fire and forget so the UI doesn't block
   };
 }
 
@@ -1491,7 +1502,9 @@ async function pullGoogleEvents(){
   const end = `${y}-${String(m+1).padStart(2,'0')}-${String(endDate.getDate()).padStart(2,'0')}`;
   const statusEl = document.getElementById('calPullStatus');
   const btn = document.getElementById('calPullBtn');
-  const targets = getSyncTargets();
+  const classTargets = getSyncTargets();
+  const assignTargets = getAssignmentSyncTargets();
+  const targets = [...classTargets, ...assignTargets.filter(at=>!classTargets.some(ct=>(ct.id||ct.name)===(at.id||at.name)))];
   state.googleYearLoading = true;
   if(statusEl) statusEl.textContent = `Loading ${monthLabel} from Google (${targets.length} calendar${targets.length>1?'s':''})...`;
   if(btn) btn.disabled = true;
@@ -1923,7 +1936,7 @@ async function syncToCalendar(a, quiet){
   const card = quiet ? null : [...document.querySelectorAll('[data-id="'+a.id+'"][data-act="sync"]')][0];
   if(card){ card.textContent = 'Syncing...'; card.disabled = true; }
   try{
-    const targets = getSyncTargets();
+    const targets = getAssignmentSyncTargets();
     const ids = {};
     let successCount = 0;
     const REMINDER_MINUTES = [10080, 4320, 2880, 1440]; // 1wk, 3d, 48h, 24h before

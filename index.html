@@ -963,7 +963,9 @@ function attachHandlers(){
         const key = chip.dataset.syncCat;
         const sel = ensureClassSyncSelection(courseId);
         sel[key] = !sel[key];
-        render();
+        const c = state.courses.find(x=>x.id===courseId);
+        render(); // show the chip flip immediately
+        if(c) reconcileClassSync(c); // then actually sync/remove on the calendar to match
         return;
       }
       const kind = chip.dataset.filterKind; // 'class' or 'type'
@@ -1010,11 +1012,16 @@ function attachHandlers(){
         state.courses = state.courses.filter(x=>x.id!==id);
         await saveCourses(); render();
       }
-      else if(act==='syncClass'){ await syncClassToCalendar(c); }
+      else if(act==='syncClass'){
+        const sel = ensureClassSyncSelection(c.id);
+        sel.classTime = true; sel.assignments = true; sel.tests = true;
+        await reconcileClassSync(c);
+      }
       else if(act==='unsyncClass'){
         btn.textContent = 'Removing...'; btn.disabled = true;
-        await unsyncClassAndItsAssignments(c, true);
-        render();
+        const sel = ensureClassSyncSelection(c.id);
+        sel.classTime = false; sel.assignments = false; sel.tests = false;
+        await reconcileClassSync(c);
       }
     };
   });
@@ -1267,7 +1274,9 @@ function openClassDetailModal(c){
   if(unsyncBtn){
     unsyncBtn.onclick = async ()=>{
       unsyncBtn.textContent = 'Removing...'; unsyncBtn.disabled = true;
-      await unsyncClassAndItsAssignments(c, true);
+      const sel = ensureClassSyncSelection(c.id);
+      sel.classTime = false; sel.assignments = false; sel.tests = false;
+      await reconcileClassSync(c);
       bg.remove(); render();
     };
   }
@@ -1907,6 +1916,85 @@ function openItemEditModal(item){
   };
 }
 
+
+// Makes the calendar match the current chip selection exactly: syncs anything toggled ON that's
+// missing, and removes anything toggled OFF that's currently present. This is what both the
+// Sync/Remove buttons AND toggling a chip directly should trigger, so "off" always means "not on
+// the calendar" rather than just "excluded from the next action."
+async function reconcileClassSync(c){
+  const sel = ensureClassSyncSelection(c.id);
+  const btn = [...document.querySelectorAll('[data-cid="'+c.id+'"][data-cact="syncClass"]')][0];
+  if(btn){ btn.textContent = 'Syncing...'; btn.disabled = true; }
+  try{
+    const daysMap = {Sun:'SU',Mon:'MO',Tue:'TU',Wed:'WE',Thu:'TH',Fri:'FR',Sat:'SA'};
+    const byday = (c.days||[]).map(d=>daysMap[d]).filter(Boolean).join(',');
+    const hasClassEvent = c.googleEventIds && Object.keys(c.googleEventIds).length>0;
+
+    // Class Time
+    if(byday){
+      if(sel.classTime && !hasClassEvent){
+        const targets = getSyncTargets();
+        const ids = {};
+        let successCount = 0;
+        const today = new Date();
+        const dayNums = {Sun:0,Mon:1,Tue:2,Wed:3,Thu:4,Fri:5,Sat:6};
+        const targetDays = (c.days||[]).map(d=>dayNums[d]).filter(n=>n!==undefined);
+        let anchor = new Date(today);
+        for(let i=0;i<7;i++){ if(targetDays.includes(anchor.getDay())) break; anchor.setDate(anchor.getDate()+1); }
+        const anchorDate = anchor.toISOString().slice(0,10);
+        const untilPart = c.termEnds ? `;UNTIL=${c.termEnds.replace(/-/g,'')}T235959Z` : '';
+        const recurrence = `RRULE:FREQ=WEEKLY;BYDAY=${byday}${untilPart}`;
+        for(const target of targets){
+          const r = await createEventOnTarget(target, {
+            title: `${c.name} (Class)`, date: anchorDate, time: c.startTime || '09:00', endTime: c.endTime || '10:00',
+            location: c.location || '', recurrence
+          });
+          if(r.ok){ ids[target.id||target.name] = r.id; successCount++; }
+        }
+        if(successCount>0){ c.googleEventIds = ids; } else { c.syncError = true; }
+        await saveCourses();
+      } else if(!sel.classTime && hasClassEvent){
+        const result = await deleteEventOnAllTargets(c.googleEventIds);
+        if(result.successCount >= result.total){ c.googleEventIds = {}; } else { c.syncError = true; }
+        await saveCourses();
+      }
+    }
+
+    // Assignments + Tests
+    const matched = state.assignments.filter(a=>assignmentMatchesCourse(a,c));
+    let anyChanged = false;
+    for(const a of matched){
+      const isTest = a.type==='test';
+      const wants = isTest ? sel.tests : sel.assignments;
+      const has = a.googleEventIds && Object.keys(a.googleEventIds).length>0;
+      if(wants && !has){
+        await syncToCalendar(a, true);
+        anyChanged = true;
+      } else if(!wants && has){
+        const result = await deleteEventOnAllTargets(a.googleEventIds);
+        if(result.successCount >= result.total){ a.synced = false; a.syncError = false; a.googleEventIds = {}; }
+        else { a.syncError = true; }
+        anyChanged = true;
+      }
+    }
+    if(anyChanged) await saveAssignments();
+
+    // overall class "synced" reflects whether everything currently selected is actually present
+    const classPartOk = !byday || !sel.classTime || (c.googleEventIds && Object.keys(c.googleEventIds).length>0);
+    const assignmentsPartOk = matched.every(a=>{
+      const isTest = a.type==='test';
+      const wants = isTest ? sel.tests : sel.assignments;
+      const has = a.googleEventIds && Object.keys(a.googleEventIds).length>0;
+      return wants ? has : true;
+    });
+    c.synced = classPartOk && assignmentsPartOk;
+    await saveCourses();
+  }catch(e){
+    c.syncError = true;
+    await saveCourses();
+  }
+  render();
+}
 
 async function syncClassToCalendar(c){
   const btn = [...document.querySelectorAll('[data-cid="'+c.id+'"][data-cact="syncClass"]')][0];

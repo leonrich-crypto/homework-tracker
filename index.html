@@ -88,6 +88,16 @@
   .analytics-num{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:1.5rem;line-height:1;color:var(--ink);}
   .analytics-stat[style*="color"] .analytics-num{color:inherit;}
   .analytics-label{font-family:'IBM Plex Mono',monospace;font-size:0.62rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-soft);margin-top:3px;}
+  .streak-panel{margin-bottom:18px;}
+  .streak-hero{display:flex;align-items:center;gap:16px;padding:16px 20px;background:var(--card-raised);border:1px solid var(--line);border-radius:10px;margin-bottom:12px;}
+  .streak-flame{font-size:2.2rem;line-height:1;flex-shrink:0;}
+  .streak-hero-num{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:1.5rem;color:#d97706;}
+  .streak-hero-sub{font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:var(--ink-soft);margin-top:2px;}
+  .streak-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;}
+  .streak-stat{padding:14px 16px;background:var(--card-raised);border:1px solid var(--line);border-radius:10px;}
+  .streak-stat-label{font-family:'IBM Plex Mono',monospace;font-size:0.68rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--ink-soft);margin-bottom:6px;}
+  .streak-stat-num{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:1.3rem;color:var(--ink);}
+  .streak-stat-sub{font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:var(--ink-soft);margin-top:3px;}
   .class-group{margin-bottom:14px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--card);}
   .class-group summary{list-style:none;cursor:pointer;padding:12px 16px;display:flex;align-items:center;gap:10px;user-select:none;}
   .class-group summary::-webkit-details-marker{display:none;}
@@ -281,7 +291,7 @@ async function loadState(){
     if(data){
       const calendars = data.calendars || [];
       state.settings = { calendarName: data.calendar_name || (calendars[0]?.name || 'University of Michigan Schedule'),
-        calendarId: calendars[0]?.id || '', calendars };
+        calendarId: calendars[0]?.id || '', calendars, bestStreak: data.best_streak || 0 };
     }
   }catch(e){ console.error('load settings failed', e); }
   render();
@@ -311,7 +321,8 @@ async function saveSettings(){
   try{
     const { error } = await sb.from('app_settings').update({
       calendar_name: state.settings.calendarName || '',
-      calendars: state.settings.calendars || []
+      calendars: state.settings.calendars || [],
+      best_streak: state.settings.bestStreak || 0
     }).eq('id', true);
     if(error) throw error;
   }catch(e){ console.error('save settings failed', e); }
@@ -366,6 +377,49 @@ function render(){
     const loaded = state.googleLoadedMonths && state.googleLoadedMonths[key];
     if(!loaded) pullGoogleEvents();
   }
+}
+
+function computeStreak(){
+  // streak = consecutive days with nothing currently sitting overdue.
+  // if anything is overdue right now, the streak is broken (0).
+  // otherwise, it's the number of days since the most recent past-due date that was fully handled.
+  const overdue = state.assignments.filter(a=>!a.done && a.date && daysUntil(a.date)<0);
+  if(overdue.length>0) return 0;
+  const pastDates = state.assignments.filter(a=>a.date && daysUntil(a.date)<=0).map(a=>a.date);
+  if(pastDates.length===0) return 0; // nothing due yet to have a streak from
+  const mostRecent = pastDates.sort().reverse()[0];
+  return Math.max(0, -daysUntil(mostRecent));
+}
+
+function renderStreakPanel(){
+  const streak = computeStreak();
+  if(streak > (state.settings.bestStreak||0)){
+    state.settings.bestStreak = streak;
+    saveSettings(); // fire and forget, no need to block render
+  }
+  const broken = streak===0 && state.assignments.some(a=>!a.done && a.date && daysUntil(a.date)<0);
+  return `
+  <div class="streak-panel">
+    <div class="streak-hero">
+      <span class="streak-flame">🔥</span>
+      <div>
+        <div class="streak-hero-num">${streak} day${streak===1?'':'s'}</div>
+        <div class="streak-hero-sub">${broken?'Streak reset — something is overdue':'without missing a due date'}</div>
+      </div>
+    </div>
+    <div class="streak-stats">
+      <div class="streak-stat">
+        <div class="streak-stat-label">🔥 Streak</div>
+        <div class="streak-stat-num">${streak} day${streak===1?'':'s'}</div>
+        <div class="streak-stat-sub">Without missing a task</div>
+      </div>
+      <div class="streak-stat">
+        <div class="streak-stat-label">🏆 Best Streak</div>
+        <div class="streak-stat-num">${state.settings.bestStreak||0} day${(state.settings.bestStreak||0)===1?'':'s'}</div>
+        <div class="streak-stat-sub">Your personal record</div>
+      </div>
+    </div>
+  </div>`;
 }
 
 function assignmentMatchesCourse(a, c){
@@ -430,6 +484,7 @@ function renderCards(){
         </div>
       </div>
     </div>` : ''}
+    ${total>0 ? renderStreakPanel() : ''}
     <div class="row">
       <strong style="font-family:'Space Grotesk',sans-serif;font-size:1.15rem;">Assignment Cards</strong>
       <button class="btn stamp-btn" id="addBtn">+ New Entry</button>

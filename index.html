@@ -921,6 +921,14 @@ function renderSettings(){
     <p style="font-family:'IBM Plex Mono',monospace;font-size:0.72rem;color:var(--ink-soft);margin-top:16px;">
       "Send to Calendar" creates a real, all-day event on the calendar above with all four email reminders attached automatically. Loading your calendar list once locks in the exact calendar so sync doesn't have to guess by name.
     </p>
+    <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--line);">
+      <label style="display:block;font-family:'IBM Plex Mono',monospace;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-soft);margin-bottom:8px;">Maintenance</label>
+      <button class="btn secondary" id="cleanupCalBtn">🧹 Clean Up Calendar</button>
+      <p style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:var(--ink-soft);margin-top:6px;">
+        Scans for duplicate or orphaned events Homework Tracker created and removes them. Runs automatically every day too — this just lets you trigger it on demand. Never touches events it didn't create.
+      </p>
+      <div class="status-line" id="cleanupStatus"></div>
+    </div>
   </div>`;
 }
 
@@ -1045,6 +1053,32 @@ function attachHandlers(){
   if(loadCals) loadCals.onclick = loadGoogleCalendars;
 
   if(state.calendarOptions) renderCalPicker();
+
+  const cleanupBtn = document.getElementById('cleanupCalBtn');
+  if(cleanupBtn) cleanupBtn.onclick = async ()=>{
+    const statusEl = document.getElementById('cleanupStatus');
+    cleanupBtn.disabled = true; cleanupBtn.textContent = 'Cleaning up...';
+    if(statusEl) statusEl.textContent = 'Scanning for duplicates and orphaned events...';
+    try{
+      const resp = await fetch(`${SUPABASE_URL}/functions/v1/reconcile-calendar`, {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${SUPABASE_KEY}` }
+      });
+      const data = await resp.json();
+      if(!resp.ok){
+        if(statusEl) statusEl.textContent = `Failed: ${data.error||'unknown error'}`;
+      } else {
+        const dupCount = (data.duplicatesRemoved||[]).length;
+        const orphanCount = (data.orphanedRefsFixed||[]).length;
+        if(statusEl) statusEl.textContent = (dupCount===0 && orphanCount===0)
+          ? '✓ All clean — no duplicates or orphaned events found.'
+          : `✓ Removed ${dupCount} duplicate event(s), fixed ${orphanCount} stale reference(s). Switch tabs to see refreshed sync status.`;
+      }
+    }catch(e){
+      if(statusEl) statusEl.textContent = 'Something went wrong running cleanup. Try again.';
+    }
+    cleanupBtn.disabled = false; cleanupBtn.textContent = '🧹 Clean Up Calendar';
+  };
 
   const dupToggle = document.getElementById('dupToggle');
   if(dupToggle) dupToggle.onchange = async (e)=>{

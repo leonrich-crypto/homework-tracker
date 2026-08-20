@@ -1853,36 +1853,49 @@ async function syncClassToCalendar(c){
   if(c.synced && !c.syncError) return; // dedupe guard: don't re-sync a class that's already fully synced
   const btn = [...document.querySelectorAll('[data-cid="'+c.id+'"][data-cact="syncClass"]')][0];
   if(btn){ btn.textContent = 'Syncing...'; btn.disabled = true; }
-  const daysMap = {Sun:'SU',Mon:'MO',Tue:'TU',Wed:'WE',Thu:'TH',Fri:'FR',Sat:'SA'};
-  const byday = (c.days||[]).map(d=>daysMap[d]).filter(Boolean).join(',');
-  const targets = getSyncTargets();
-  const ids = {};
-  let successCount = 0;
-  // find the next upcoming occurrence of this class's weekday to anchor the recurring event's start date
-  const today = new Date();
-  const dayNums = {Sun:0,Mon:1,Tue:2,Wed:3,Thu:4,Fri:5,Sat:6};
-  const targetDays = (c.days||[]).map(d=>dayNums[d]).filter(n=>n!==undefined);
-  let anchor = new Date(today);
-  for(let i=0;i<7;i++){
-    if(targetDays.includes(anchor.getDay())) break;
-    anchor.setDate(anchor.getDate()+1);
-  }
-  const anchorDate = anchor.toISOString().slice(0,10);
-  const untilPart = c.termEnds ? `;UNTIL=${c.termEnds.replace(/-/g,'')}T235959Z` : '';
-  const recurrence = byday ? `RRULE:FREQ=WEEKLY;BYDAY=${byday}${untilPart}` : undefined;
+  try{
+    const daysMap = {Sun:'SU',Mon:'MO',Tue:'TU',Wed:'WE',Thu:'TH',Fri:'FR',Sat:'SA'};
+    const byday = (c.days||[]).map(d=>daysMap[d]).filter(Boolean).join(',');
+    const targets = getSyncTargets();
+    const ids = {};
+    let successCount = 0;
+    // find the next upcoming occurrence of this class's weekday to anchor the recurring event's start date
+    const today = new Date();
+    const dayNums = {Sun:0,Mon:1,Tue:2,Wed:3,Thu:4,Fri:5,Sat:6};
+    const targetDays = (c.days||[]).map(d=>dayNums[d]).filter(n=>n!==undefined);
+    let anchor = new Date(today);
+    if(targetDays.length>0){
+      for(let i=0;i<7;i++){
+        if(targetDays.includes(anchor.getDay())) break;
+        anchor.setDate(anchor.getDate()+1);
+      }
+    }
+    const anchorDate = anchor.toISOString().slice(0,10);
+    const untilPart = c.termEnds ? `;UNTIL=${c.termEnds.replace(/-/g,'')}T235959Z` : '';
+    const recurrence = byday ? `RRULE:FREQ=WEEKLY;BYDAY=${byday}${untilPart}` : undefined;
 
-  for(const target of targets){
-    const r = await createEventOnTarget(target, {
-      title: `${c.name} (Class)`, date: anchorDate, time: c.startTime || '09:00', endTime: c.endTime || '10:00',
-      location: c.location || '', recurrence
-    });
-    if(r.ok){ ids[target.id||target.name] = r.id; successCount++; }
-  }
-  if(successCount>0){
-    c.synced = true;
-    c.syncError = successCount < targets.length;
-    c.googleEventIds = ids;
-    await saveCourses();
+    // only attempt the class's own lecture-time event if it actually has meeting days set
+    if(byday){
+      for(const target of targets){
+        const r = await createEventOnTarget(target, {
+          title: `${c.name} (Class)`, date: anchorDate, time: c.startTime || '09:00', endTime: c.endTime || '10:00',
+          location: c.location || '', recurrence
+        });
+        if(r.ok){ ids[target.id||target.name] = r.id; successCount++; }
+      }
+    }
+
+    const classEventOk = byday ? successCount>0 : true; // no meeting days set = nothing to sync for the class itself, that's fine
+    if(byday){
+      if(successCount>0){
+        c.synced = true;
+        c.syncError = successCount < targets.length;
+        c.googleEventIds = ids;
+      } else {
+        c.syncError = true;
+      }
+      await saveCourses();
+    }
 
     // sync every matching assignment too, so "synced" is a comprehensive state for the whole class
     const matched = state.assignments.filter(a=>assignmentMatchesCourse(a,c) && !a.synced);
@@ -1891,9 +1904,11 @@ async function syncClassToCalendar(c){
         await syncToCalendar(a, true); // quiet=true: skip individual button DOM lookups, we're batching
       }
       await saveAssignments();
+      if(!byday){ c.synced = true; c.syncError = false; await saveCourses(); } // no class meeting time, but assignments synced fine
     }
-  } else {
+  }catch(e){
     c.syncError = true;
+    await saveCourses();
   }
   render();
 }

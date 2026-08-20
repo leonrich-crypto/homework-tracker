@@ -225,7 +225,7 @@
       </div>
     </div>
     <div>
-      <div class="reg-no" id="regNo">ASSIGNMENTS: —<br>STILL OPEN: —</div>
+      <div class="reg-no" id="regNo">ASSIGNMENTS: —<br>NOT COMPLETED: —</div>
       <div class="week-bar" id="weekBar"></div>
     </div>
   </header>
@@ -371,7 +371,7 @@ function daysUntil(iso){
 
 function render(){
   const open = state.assignments.filter(a=>!a.done).length;
-  document.getElementById('regNo').innerHTML = `ASSIGNMENTS: ${state.assignments.length}<br>STILL OPEN: ${open}`;
+  document.getElementById('regNo').innerHTML = `ASSIGNMENTS: ${state.assignments.length}<br>NOT COMPLETED: ${open}`;
 
   const weekStart = mondayOf(new Date().toISOString().slice(0,10));
   const weekEndDate = new Date(weekStart+'T00:00:00'); weekEndDate.setDate(weekEndDate.getDate()+6);

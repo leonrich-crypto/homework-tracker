@@ -707,7 +707,9 @@ function renderClasses(){
           const ac = a.course.toLowerCase().trim();
           return (c.name && ac===c.name.toLowerCase().trim()) || (c.courseNumber && ac===c.courseNumber.toLowerCase().trim());
         }).length;
-        const hasSyncedEvents = c.googleEventIds && Object.keys(c.googleEventIds).length>0;
+        const hasClassEvent = c.googleEventIds && Object.keys(c.googleEventIds).length>0;
+        const hasSyncedAssignments = state.assignments.some(a=>assignmentMatchesCourse(a,c) && a.googleEventIds && Object.keys(a.googleEventIds).length>0);
+        const hasSyncedEvents = hasClassEvent || hasSyncedAssignments;
         return `<div class="card class-card-tall" data-class-card="${c.id}" style="cursor:pointer;">
           <div class="card-tab" style="background:${c.color}">${c.courseNumber||c.name}</div>
           <h3>${c.icon||'📘'} ${c.name}</h3>
@@ -1199,7 +1201,7 @@ function openClassDetailModal(c){
     <div class="row" style="margin-top:14px;">
       <button class="btn secondary" id="d_delete" style="color:var(--stamp-dark);border-color:var(--stamp-dark);">🗑 Delete</button>
       <div style="display:flex;gap:6px;flex-wrap:wrap;">
-        ${(c.googleEventIds && Object.keys(c.googleEventIds).length>0) ? `<button class="btn secondary" id="d_unsync" style="color:var(--stamp-dark);border-color:var(--stamp-dark);">✕ Remove from Calendar</button>` : ''}
+        ${(( c.googleEventIds && Object.keys(c.googleEventIds).length>0) || state.assignments.some(a=>assignmentMatchesCourse(a,c) && a.googleEventIds && Object.keys(a.googleEventIds).length>0)) ? `<button class="btn secondary" id="d_unsync" style="color:var(--stamp-dark);border-color:var(--stamp-dark);">✕ Remove from Calendar</button>` : ''}
         <button class="btn secondary" id="d_cancel">Cancel</button>
         <button class="btn stamp-btn" id="d_save">💾 Save</button>
       </div>

@@ -1875,6 +1875,15 @@ async function syncClassToCalendar(c){
     c.syncError = successCount < targets.length;
     c.googleEventIds = ids;
     await saveCourses();
+
+    // sync every matching assignment too, so "synced" is a comprehensive state for the whole class
+    const matched = state.assignments.filter(a=>assignmentMatchesCourse(a,c) && !a.synced);
+    if(matched.length>0){
+      for(const a of matched){
+        await syncToCalendar(a, true); // quiet=true: skip individual button DOM lookups, we're batching
+      }
+      await saveAssignments();
+    }
   } else {
     c.syncError = true;
   }
@@ -1882,8 +1891,8 @@ async function syncClassToCalendar(c){
 }
 
 
-async function syncToCalendar(a){
-  const card = [...document.querySelectorAll('[data-id="'+a.id+'"][data-act="sync"]')][0];
+async function syncToCalendar(a, quiet){
+  const card = quiet ? null : [...document.querySelectorAll('[data-id="'+a.id+'"][data-act="sync"]')][0];
   if(card){ card.textContent = 'Syncing...'; card.disabled = true; }
   const targets = getSyncTargets();
   const ids = {};
@@ -1906,11 +1915,11 @@ async function syncToCalendar(a){
     a.synced = true;
     a.syncError = successCount < targets.length;
     a.googleEventIds = ids;
-    await saveAssignments();
+    if(!quiet) await saveAssignments();
   } else {
     a.syncError = true;
   }
-  render();
+  if(!quiet) render();
 }
 
 loadState();

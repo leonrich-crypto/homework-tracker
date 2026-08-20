@@ -105,6 +105,7 @@
   .card-tab{position:absolute;top:-9px;right:14px;font-family:'IBM Plex Mono',monospace;font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:#fff;padding:3px 8px;border-radius:5px 5px 0 0;}
   .card h3{font-family:'Zilla Slab',serif;font-size:1.08rem;margin:14px 0 4px 22px;line-height:1.2;color:var(--ink);}
   .card .meta{font-family:'IBM Plex Mono',monospace;font-size:0.72rem;color:var(--ink-soft);margin-left:22px;margin-bottom:10px;}
+  .card .meta.class-desc{font-size:0.66rem;line-height:1.45;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
   .type-badge{display:inline-block;font-size:0.62rem;text-transform:uppercase;letter-spacing:0.05em;padding:2px 7px;border-radius:3px;font-family:'IBM Plex Mono',monospace;margin-right:6px;color:#fff;}
   .card-actions{display:flex;gap:6px;margin-left:22px;flex-wrap:wrap;margin-top:8px;}
   .done-badge{position:absolute;bottom:10px;right:10px;font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:0.68rem;color:#eafbea;background:var(--green);border-radius:5px;padding:3px 9px;letter-spacing:0.03em;}
@@ -460,14 +461,19 @@ function renderClasses(){
     <div class="cards-grid">
       ${state.courses.map(c=>{
         const meetingTime = (c.days&&c.days.length) ? `${c.days.join('')} ${c.startTime?fmtTime(c.startTime):''}${c.endTime?'–'+fmtTime(c.endTime):''}` : '';
-        const assignCount = state.assignments.filter(a=>a.course && c.name && a.course.toLowerCase()===c.name.toLowerCase()).length;
+        const assignCount = state.assignments.filter(a=>{
+          if(!a.course) return false;
+          const ac = a.course.toLowerCase().trim();
+          return (c.name && ac===c.name.toLowerCase().trim()) || (c.courseNumber && ac===c.courseNumber.toLowerCase().trim());
+        }).length;
         return `<div class="card" data-class-card="${c.id}" style="cursor:pointer;">
           <div class="card-tab" style="background:${c.color}">${c.courseNumber||c.name}</div>
           <h3>${c.icon||'📘'} ${c.name}</h3>
-          <div class="meta" style="margin-bottom:2px;">${c.description||'No description yet'}</div>
+          <div class="meta class-desc">${c.description||'No description yet'}</div>
           ${meetingTime?`<div class="meta" style="margin-bottom:2px;">${meetingTime}</div>`:''}
           ${c.professor?`<div class="meta" style="margin-bottom:2px;">${c.professor}</div>`:''}
           ${c.location?`<div class="meta" style="margin-bottom:2px;">${c.location}</div>`:''}
+          ${c.canvasLink?`<div class="meta" style="margin-bottom:2px;"><a href="${c.canvasLink}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--blue-text);">🔗 Canvas</a></div>`:''}
           <div class="meta" style="color:var(--blue-text);">→ ${assignCount} assignment${assignCount===1?'':'s'}</div>
           <div class="card-actions">
             <button class="btn small secondary" data-cact="syncClass" data-cid="${c.id}" ${(c.synced && !c.syncError)?'disabled':''}>${(c.synced && !c.syncError)?'Synced':'Send to Calendar'}</button>

@@ -141,7 +141,6 @@
   .card .meta.class-desc{font-size:0.66rem;line-height:1.45;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
   .type-badge{display:inline-block;font-size:0.62rem;text-transform:uppercase;letter-spacing:0.05em;padding:2px 7px;border-radius:3px;font-family:'IBM Plex Mono',monospace;margin-right:6px;color:#fff;}
   .card-actions{display:flex;gap:6px;margin-left:22px;flex-wrap:wrap;margin-top:8px;align-items:center;}
-  .done-badge{position:absolute;bottom:10px;right:10px;font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:0.68rem;color:#eafbea;background:var(--green);border-radius:5px;padding:3px 9px;letter-spacing:0.03em;}
   .sync-status-row{margin-left:22px;margin-bottom:8px;}
   .sync-badge{display:inline-flex;align-items:center;gap:4px;font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:0.66rem;letter-spacing:0.03em;padding:3px 10px;border-radius:12px;}
   .sync-badge-ok{background:var(--green);color:#eafbea;}
@@ -646,6 +645,7 @@ function renderAssignmentCard(a){
     ${a.notes?`<div class="meta" style="margin-top:-4px;">${a.notes}</div>`:''}
     <div class="card-actions" style="margin-top:10px;">
       <button class="btn small ${a.done?'secondary':''}" data-act="toggle" data-id="${a.id}">${a.done?'↺ Open':'✓ Done'}</button>
+      ${a.done ? `<span class="sync-badge sync-badge-ok">✓ Submitted</span>` : ''}
       ${a.syncError
         ? `<span class="sync-badge sync-badge-error">⚠ Failed</span>`
         : (a.synced ? `<span class="sync-badge sync-badge-ok">📅 Synced</span>` : '')}
@@ -655,7 +655,6 @@ function renderAssignmentCard(a){
       ${hasSyncedEvents ? `<button class="btn small secondary card-delete-btn" data-act="unsync" data-id="${a.id}" title="Remove from Calendar">📅✕</button>` : ''}
       <button class="btn small secondary card-delete-btn" data-act="del" data-id="${a.id}" title="Delete">🗑</button>
     </div>
-    ${a.done?`<div class="done-badge">✓ Submitted</div>`:''}
   </div>`;
 }
 

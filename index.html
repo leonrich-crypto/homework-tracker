@@ -631,13 +631,11 @@ function renderAssignmentCard(a){
   const tc = TYPE_COLORS[a.type]||'#5a5a3a';
   const du = a.date ? daysUntil(a.date) : null;
   const dueLabel = du===null?'':(du<0?`${Math.abs(du)}d overdue`:du===0?'due today':`in ${du}d`);
-  const dueColor = a.done ? 'var(--green)'
-    : du===null ? 'var(--ink-soft)'
+  const dueColor = du===null ? 'var(--ink-soft)'
     : du<0 ? 'var(--stamp)'
     : du<=2 ? '#d97706'
     : du<=7 ? '#c9a227'
     : 'var(--green)';
-  const hasSyncedEvents = a.googleEventIds && Object.keys(a.googleEventIds).length>0;
   return `<div class="card">
     <div class="card-tab" style="background:${cc}">${a.course||'General'}</div>
     <h3>${a.title}</h3>
@@ -647,12 +645,8 @@ function renderAssignmentCard(a){
       <button class="btn small ${a.done?'secondary':''}" data-act="toggle" data-id="${a.id}">${a.done?'↺ Open':'✓ Done'}</button>
       ${a.done ? `<span class="sync-badge sync-badge-ok">✓ Submitted</span>` : ''}
       ${a.syncError
-        ? `<span class="sync-badge sync-badge-error">⚠ Failed</span>`
-        : (a.synced ? `<span class="sync-badge sync-badge-ok">📅 Synced</span>` : '')}
-      ${(!a.synced || a.syncError)
-        ? `<button class="btn small secondary" data-act="sync" data-id="${a.id}" ${a.syncError?'style="color:var(--stamp-dark);border-color:var(--stamp-dark);"':''}>${a.syncError?'🔁 Retry':'📅 Sync'}</button>`
-        : ''}
-      ${hasSyncedEvents ? `<button class="btn small secondary card-delete-btn" data-act="unsync" data-id="${a.id}" title="Remove from Calendar">📅✕</button>` : ''}
+        ? `<span class="sync-badge sync-badge-error">⚠ Sync failed</span>`
+        : (a.synced ? `<span class="sync-badge sync-badge-ok">📅 Synced</span>` : `<span class="sync-badge sync-badge-none">Not synced</span>`)}
       <button class="btn small secondary card-delete-btn" data-act="del" data-id="${a.id}" title="Delete">🗑</button>
     </div>
   </div>`;

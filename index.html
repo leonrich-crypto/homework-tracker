@@ -598,14 +598,18 @@ function classKeyFor(a){
   return match ? match.id : '__other';
 }
 
-function renderFilterBar(){
+function ensureCardFilters(){
   if(!state.cardFilters){
     state.cardFilters = {
       classes: new Set([...state.courses.map(c=>c.id), '__other']),
       types: new Set(['homework','quiz','test','project','reading','other'])
     };
   }
-  const cf = state.cardFilters;
+  return state.cardFilters;
+}
+
+function renderFilterBar(){
+  const cf = ensureCardFilters();
   const classChips = [...state.courses, {id:'__other', name:'Other', icon:'📎', color:'#6b7480'}]
     .filter(c => state.assignments.some(a=>classKeyFor(a)===c.id))
     .map(c=>{
@@ -740,8 +744,11 @@ function buildDayItems(y,m,d){
   const weekday = DOW[new Date(y,m,d).getDay()];
   const monthKey = `${y}-${m}`;
   const gEvents = state.googleEvents[monthKey] || [];
-  const assignToday = state.assignments.filter(a=>a.date===iso);
-  const classesToday = state.courses.filter(c=>(c.days||[]).includes(weekday));
+  const cf = ensureCardFilters();
+  let assignToday = state.assignments.filter(a=>a.date===iso);
+  let classesToday = state.courses.filter(c=>(c.days||[]).includes(weekday));
+  assignToday = assignToday.filter(a=> cf.types.has(a.type||'other') && cf.classes.has(classKeyFor(a)));
+  classesToday = classesToday.filter(c=> cf.classes.has(c.id));
   const knownIds = state.settings.showSyncedDuplicates ? null : getKnownSyncedEventIds();
   const googleToday = gEvents.filter(e=> e.date===iso && (state.settings.showSyncedDuplicates || !knownIds.has(e.id)));
   let items = [
@@ -861,6 +868,7 @@ function renderCalendar(){
       <span class="status-line" id="calPullStatus" style="margin-top:0;">${state.googleYearLoading?'Loading from Google...':state.googleEventsYearLoaded?`Synced with Google (☁).`:'Not showing your existing Google Calendar events yet.'}</span>
       <button class="btn secondary small" id="calPullBtn" ${state.googleYearLoading?'disabled':''}>${state.googleEventsYearLoaded?'Refresh this month from Google':'Load this month from Google'}</button>
     </div>
+    ${renderFilterBar()}
     ${bodyHtml}
   </div>`;
 }

@@ -1648,16 +1648,28 @@ async function deleteEventOnAllTargets(idsMap){
 // Removes a class's own recurring lecture event AND every assignment belonging to that
 // class that's synced to the calendar too — a full "unsync this whole course" action.
 async function unsyncClassAndItsAssignments(c){
-  if(c.googleEventIds) await deleteEventOnAllTargets(c.googleEventIds);
-  c.synced = false; c.syncError = false; c.googleEventIds = {};
-  await saveCourses();
+  if(c.googleEventIds && Object.keys(c.googleEventIds).length>0){
+    const result = await deleteEventOnAllTargets(c.googleEventIds);
+    if(result.successCount >= result.total){
+      c.synced = false; c.syncError = false; c.googleEventIds = {};
+    } else {
+      c.syncError = true; // some deletions failed — keep the ids so a retry can find them
+    }
+    await saveCourses();
+  }
 
   const matched = state.assignments.filter(a=>assignmentMatchesCourse(a,c) && a.googleEventIds && Object.keys(a.googleEventIds).length>0);
+  let anyChanged = false;
   for(const a of matched){
-    await deleteEventOnAllTargets(a.googleEventIds);
-    a.synced = false; a.syncError = false; a.googleEventIds = {};
+    const result = await deleteEventOnAllTargets(a.googleEventIds);
+    if(result.successCount >= result.total){
+      a.synced = false; a.syncError = false; a.googleEventIds = {};
+    } else {
+      a.syncError = true;
+    }
+    anyChanged = true;
   }
-  if(matched.length>0) await saveAssignments();
+  if(anyChanged) await saveAssignments();
 }
 
 

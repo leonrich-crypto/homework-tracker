@@ -962,13 +962,15 @@ function attachHandlers(){
       ev.stopPropagation();
       const id = btn.dataset.cid; const act = btn.dataset.cact;
       const c = state.courses.find(x=>x.id===id);
-      if(act==='delClass'){ state.courses = state.courses.filter(x=>x.id!==id); await saveCourses(); render(); }
+      if(act==='delClass'){
+        await unsyncClassAndItsAssignments(c);
+        state.courses = state.courses.filter(x=>x.id!==id);
+        await saveCourses(); render();
+      }
       else if(act==='syncClass'){ await syncClassToCalendar(c); }
       else if(act==='unsyncClass'){
         btn.textContent = 'Removing...'; btn.disabled = true;
-        if(c.googleEventIds) await deleteEventOnAllTargets(c.googleEventIds);
-        c.synced = false; c.syncError = false; c.googleEventIds = {};
-        await saveCourses();
+        await unsyncClassAndItsAssignments(c);
         render();
       }
     };
@@ -1219,17 +1221,15 @@ function openClassDetailModal(c){
   if(unsyncBtn){
     unsyncBtn.onclick = async ()=>{
       unsyncBtn.textContent = 'Removing...'; unsyncBtn.disabled = true;
-      if(c.googleEventIds) await deleteEventOnAllTargets(c.googleEventIds);
-      c.synced = false; c.syncError = false; c.googleEventIds = {};
-      await saveCourses();
+      await unsyncClassAndItsAssignments(c);
       bg.remove(); render();
     };
   }
   bg.querySelector('#d_delete').onclick = async ()=>{
+    await unsyncClassAndItsAssignments(c);
     state.courses = state.courses.filter(x=>x.id!==c.id);
     await saveCourses();
     bg.remove(); render();
-    if(c.googleEventIds) deleteEventOnAllTargets(c.googleEventIds);
   };
   bg.querySelector('#d_save').onclick = async ()=>{
     c.name = bg.querySelector('#d_name').value.trim() || c.name;
@@ -1644,6 +1644,21 @@ async function deleteEventOnAllTargets(idsMap){
     if(ok) successCount++;
   }
   return { successCount, total: entries.length };
+}
+
+// Removes a class's own recurring lecture event AND every assignment belonging to that
+// class that's synced to the calendar too — a full "unsync this whole course" action.
+async function unsyncClassAndItsAssignments(c){
+  if(c.googleEventIds) await deleteEventOnAllTargets(c.googleEventIds);
+  c.synced = false; c.syncError = false; c.googleEventIds = {};
+  await saveCourses();
+
+  const matched = state.assignments.filter(a=>assignmentMatchesCourse(a,c) && a.googleEventIds && Object.keys(a.googleEventIds).length>0);
+  for(const a of matched){
+    await deleteEventOnAllTargets(a.googleEventIds);
+    a.synced = false; a.syncError = false; a.googleEventIds = {};
+  }
+  if(matched.length>0) await saveAssignments();
 }
 
 

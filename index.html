@@ -1227,6 +1227,9 @@ function openClassDetailModal(c){
             ? `<span class="sync-badge sync-badge-ok">📅 On calendar</span>`
             : `<span class="sync-badge sync-badge-none">Not synced yet</span>`)}
       </div>
+      <div style="margin-top:8px;">
+        ${renderSyncCategoryChips(c.id)}
+      </div>
     </div>
 
     <div class="row" style="margin-top:14px;">

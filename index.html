@@ -148,6 +148,8 @@
   .sync-badge-error{background:var(--stamp);color:#fbeee9;}
   .sync-badge-none{background:var(--paper);color:var(--ink-soft);border:1px solid var(--line-light);}
   .class-card-tall .card-actions{margin-top:4px;}
+  .card-delete-btn{padding:6px 10px;opacity:0.75;}
+  .card-delete-btn:hover{opacity:1;color:var(--stamp-dark);border-color:var(--stamp-dark);}
 
   .empty{font-family:'IBM Plex Mono',monospace;font-size:0.85rem;color:var(--ink-soft);text-align:center;padding:30px 10px;border:1.5px dashed var(--line-light);border-radius:6px;}
 
@@ -581,15 +583,26 @@ function renderAssignmentCard(a){
     : du<=2 ? '#d97706'
     : du<=7 ? '#c9a227'
     : 'var(--green)';
+  const hasSyncedEvents = a.googleEventIds && Object.keys(a.googleEventIds).length>0;
   return `<div class="card">
     <div class="card-tab" style="background:${cc}">${a.course||'General'}</div>
     <h3>${a.title}</h3>
     <div class="meta"><span class="type-badge" style="background:${tc}">${a.type}</span>${fmtDate(a.date)}${a.time?' · '+fmtTime(a.time)+(a.endTime?'–'+fmtTime(a.endTime):''):''}${a.location?' · '+a.location:''}${dueLabel?` · <span style="color:${dueColor};font-weight:600;">${dueLabel}</span>`:''}</div>
     ${a.notes?`<div class="meta" style="margin-top:-4px;">${a.notes}</div>`:''}
+    <div class="sync-status-row">
+      ${a.syncError
+        ? `<span class="sync-badge sync-badge-error">⚠ Sync failed</span>`
+        : (a.synced
+          ? `<span class="sync-badge sync-badge-ok">📅 On calendar</span>`
+          : '')}
+    </div>
     <div class="card-actions">
-      <button class="btn small ${a.done?'secondary':''}" data-act="toggle" data-id="${a.id}">${a.done?'Mark open':'Mark done'}</button>
-      <button class="btn small ${a.synced && !a.syncError?'secondary':''}" data-act="sync" data-id="${a.id}" ${a.syncError?'style="color:var(--stamp-dark);border-color:var(--stamp-dark);"':(a.synced?'style="opacity:1;cursor:default;pointer-events:none;"':'')}>${a.syncError?'Retry Sync':a.synced?'Synced ✓':'Send to Calendar'}</button>
-      <button class="btn small secondary" data-act="del" data-id="${a.id}">Delete</button>
+      <button class="btn small ${a.done?'secondary':''}" data-act="toggle" data-id="${a.id}">${a.done?'↺ Mark open':'✓ Mark done'}</button>
+      ${(!a.synced || a.syncError)
+        ? `<button class="btn small secondary" data-act="sync" data-id="${a.id}" ${a.syncError?'style="color:var(--stamp-dark);border-color:var(--stamp-dark);"':''}>${a.syncError?'🔁 Retry sync':'📅 Send to Calendar'}</button>`
+        : ''}
+      ${hasSyncedEvents ? `<button class="btn small secondary" data-act="unsync" data-id="${a.id}" style="color:var(--stamp-dark);border-color:var(--stamp-dark);">✕ Remove</button>` : ''}
+      <button class="btn small secondary card-delete-btn" data-act="del" data-id="${a.id}" title="Delete">🗑</button>
     </div>
     ${a.done?`<div class="done-badge">✓ Submitted</div>`:''}
   </div>`;
@@ -876,6 +889,12 @@ function attachHandlers(){
       if(act==='toggle'){ a.done = !a.done; await saveAssignments(); render(); }
       else if(act==='del'){ state.assignments = state.assignments.filter(x=>x.id!==id); await saveAssignments(); render(); }
       else if(act==='sync'){ await syncToCalendar(a); }
+      else if(act==='unsync'){
+        if(a.googleEventIds) await deleteEventOnAllTargets(a.googleEventIds);
+        a.synced = false; a.syncError = false; a.googleEventIds = {};
+        await saveAssignments();
+        render();
+      }
     };
   });
 
